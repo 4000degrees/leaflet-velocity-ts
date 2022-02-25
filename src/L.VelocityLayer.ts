@@ -121,14 +121,8 @@ export default class VelocityLayer {
 				'dragstart': () => {
 					this._windy.stop();
 				},
-				'dragend': () => {
-					this._clearAndRestart();
-				},
 				'zoomstart': () => {
 					this._windy.stop();
-				},
-				'zoomend': () => {
-					this._clearAndRestart();
 				},
 				'resize': () => {
 					this._clearWind();

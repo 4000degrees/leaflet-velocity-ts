@@ -37,6 +37,7 @@ export default class CanvasLayer {
 	_onLayerDidMove () {
 		var topLeft = this._map.containerPointToLayerPoint([0, 0]);
 		L.DomUtil.setPosition(this._canvas, topLeft);
+		this._canvas.getContext("2d").clearRect(0, 0, 3000, 3000)
 		this.drawLayer();
 	}
 	
