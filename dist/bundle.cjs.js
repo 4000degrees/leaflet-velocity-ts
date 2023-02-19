@@ -483,21 +483,16 @@ var CanvasLayer = /** @class */ (function () {
         var animated = this._map.options.zoomAnimation && L$1.Browser.any3d;
         L$1.DomUtil.addClass(this._canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
         map._panes.overlayPane.appendChild(this._canvas);
-        map.on(this.getEvents(), this);
         var del = this._delegate || this;
         del.onLayerDidMount && del.onLayerDidMount(); // -- callback
         this.needRedraw();
-        var self = this;
-        setTimeout(function () {
-            self._onLayerDidMove();
-        }, 0);
+        this._onLayerDidMove();
     };
     //-------------------------------------------------------------
     CanvasLayer.prototype.onRemove = function (map) {
         var del = this._delegate || this;
         del.onLayerWillUnmount && del.onLayerWillUnmount(); // -- callback
         map.getPanes().overlayPane.removeChild(this._canvas);
-        map.off(this.getEvents(), this);
         this._canvas = null;
     };
     //------------------------------------------------------------

@@ -68,18 +68,13 @@ export default class CanvasLayer {
 		var animated = this._map.options.zoomAnimation && L.Browser.any3d;
 		L.DomUtil.addClass(this._canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
 
-
 		map._panes.overlayPane.appendChild(this._canvas);
-		map.on(this.getEvents(),this);
 
 		var del = this._delegate || this;
 		del.onLayerDidMount && del.onLayerDidMount(); // -- callback
 		this.needRedraw();
 
-		var self = this;
-		setTimeout(function(){
-			self._onLayerDidMove();
-		}, 0);
+		this._onLayerDidMove();
 	}
 
 	//-------------------------------------------------------------
@@ -87,13 +82,9 @@ export default class CanvasLayer {
 		var del = this._delegate || this;
 		del.onLayerWillUnmount && del.onLayerWillUnmount(); // -- callback
 
-
 		map.getPanes().overlayPane.removeChild(this._canvas);
 
-		map.off(this.getEvents(),this);
-
 		this._canvas = null;
-
 	}
 
 	//------------------------------------------------------------
