@@ -1,88 +1,162 @@
-import { Util, DomUtil, Browser, Layer, DomEvent, point, Control, control, Class } from 'leaflet';
+import * as L$1 from 'leaflet';
 
-var Particule = /** @class */ (function () {
-    function Particule(x, y, maxAge) {
-        this.x = x;
-        this.y = y;
-        this.age = Math.floor(Math.random() * maxAge);
-        this.maxAge = maxAge;
-    }
-    Particule.prototype.reset = function (x, y) {
-        this.x = x;
-        this.y = y;
-        this.age = 0;
-    };
-    Object.defineProperty(Particule.prototype, "isDead", {
-        get: function () {
-            return this.age > this.maxAge;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Particule.prototype.grow = function () {
-        this.age++;
-    };
-    return Particule;
-}());
+/******************************************************************************
+Copyright (c) Microsoft Corporation.
 
-var CanvasBound = /** @class */ (function () {
-    function CanvasBound(xMin, yMin, xMax, yMax) {
-        this.xMin = xMin;
-        this.yMin = yMin;
-        this.xMax = xMax;
-        this.yMax = yMax;
-    }
-    Object.defineProperty(CanvasBound.prototype, "width", {
-        get: function () {
-            return this.xMax - this.xMin;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(CanvasBound.prototype, "height", {
-        get: function () {
-            return this.yMax - this.yMin;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    CanvasBound.prototype.getRandomParticule = function (maxAge) {
-        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
-        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
-        return new Particule(x, y, maxAge);
-    };
-    CanvasBound.prototype.resetParticule = function (p) {
-        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
-        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
-        p.reset(x, y);
-        return p;
-    };
-    return CanvasBound;
-}());
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
 
-var MapBound = /** @class */ (function () {
-    function MapBound(north, east, south, west) {
-        this.north = north * Math.PI / 180;
-        this.east = east * Math.PI / 180;
-        this.south = south * Math.PI / 180;
-        this.west = west * Math.PI / 180;
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+/* global Reflect, Promise */
+
+var extendStatics = function(d, b) {
+    extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+    return extendStatics(d, b);
+};
+
+function __extends(d, b) {
+    if (typeof b !== "function" && b !== null)
+        throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
+    extendStatics(d, b);
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+}
+
+var __assign = function() {
+    __assign = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
+
+var CanvasLayer = /** @class */ (function (_super) {
+    __extends(CanvasLayer, _super);
+    function CanvasLayer() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this._delegate = _this;
+        return _this;
     }
-    Object.defineProperty(MapBound.prototype, "width", {
-        get: function () {
-            return (720 + this.east - this.west) % 360;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(MapBound.prototype, "height", {
-        get: function () {
-            return (360 + this.north - this.south) % 180;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    return MapBound;
-}());
+    CanvasLayer.prototype.delegate = function (delegate) {
+        this._delegate = delegate;
+        return this;
+    };
+    CanvasLayer.prototype.needRedraw = function () {
+        if (!this._frame) {
+            this._frame = L$1.Util.requestAnimFrame(this.drawLayer, this);
+        }
+        return this;
+    };
+    CanvasLayer.prototype._onLayerDidResize = function (resizeEvent) {
+        this.canvas.width = resizeEvent.newSize.x;
+        this.canvas.height = resizeEvent.newSize.y;
+    };
+    CanvasLayer.prototype._onLayerDidMove = function () {
+        var topLeft = this._map.containerPointToLayerPoint([0, 0]);
+        L$1.DomUtil.setPosition(this.canvas, topLeft);
+        this.canvas.getContext("2d").clearRect(0, 0, 3000, 3000);
+        this.drawLayer();
+    };
+    CanvasLayer.prototype.getEvents = function () {
+        var events = {
+            resize: this._onLayerDidResize,
+            moveend: this._onLayerDidMove,
+            zoomanim: undefined,
+        };
+        if (this._map.options.zoomAnimation && L$1.Browser.any3d) {
+            events.zoomanim = this._animateZoom;
+        }
+        return events;
+    };
+    CanvasLayer.prototype.onAdd = function (map) {
+        this._map = map;
+        this.canvas = L$1.DomUtil.create("canvas", "leaflet-layer");
+        var size = this._map.getSize();
+        this.canvas.width = size.x;
+        this.canvas.height = size.y;
+        var animated = this._map.options.zoomAnimation && L$1.Browser.any3d;
+        L$1.DomUtil.addClass(this.canvas, "leaflet-zoom-" + (animated ? "animated" : "hide"));
+        map.getPane("overlayPane").appendChild(this.canvas);
+        this._delegate.onLayerDidMount && this._delegate.onLayerDidMount(); // -- callback
+        this.needRedraw();
+        this._onLayerDidMove();
+        return this;
+    };
+    CanvasLayer.prototype.onRemove = function (map) {
+        this._delegate.onLayerWillUnmount && this._delegate.onLayerWillUnmount(); // -- callback
+        map.getPanes().overlayPane.removeChild(this.canvas);
+        this.canvas = null;
+        return this;
+    };
+    CanvasLayer.prototype.addTo = function (map) {
+        map.addLayer(this);
+        return this;
+    };
+    CanvasLayer.prototype.LatLonToMercator = function (latlon) {
+        return {
+            x: (latlon.lng * 6378137 * Math.PI) / 180,
+            y: Math.log(Math.tan(((90 + latlon.lat) * Math.PI) / 360)) * 6378137,
+        };
+    };
+    CanvasLayer.prototype.drawLayer = function () {
+        // -- todo make the viewInfo properties  flat objects.
+        var size = this._map.getSize();
+        var bounds = this._map.getBounds();
+        var zoom = this._map.getZoom();
+        var center = this.LatLonToMercator(this._map.getCenter());
+        var corner = this.LatLonToMercator(this._map.containerPointToLatLng(this._map.getSize()));
+        this._delegate.onDrawLayer &&
+            this._delegate.onDrawLayer({
+                layer: this,
+                canvas: this.canvas,
+                bounds: bounds,
+                size: size,
+                zoom: zoom,
+                center: center,
+                corner: corner,
+            });
+        this._frame = null;
+    };
+    CanvasLayer.prototype._animateZoom = function (e) {
+        var scale = this._map.getZoomScale(e.zoom, this._map.getZoom());
+        var position = L$1.DomUtil.getPosition(this.canvas);
+        var viewHalf = this._map.getSize().multiplyBy(0.5);
+        var currentCenterPoint = this._map.project(this._map.getCenter(), e.zoom);
+        var destCenterPoint = this._map.project(e.center, e.zoom);
+        var centerOffset = destCenterPoint.subtract(currentCenterPoint);
+        var topLeftOffset = viewHalf
+            .multiplyBy(-scale)
+            .add(position)
+            .add(viewHalf)
+            .subtract(centerOffset);
+        L$1.DomUtil.setTransform(this.canvas, topLeftOffset, scale);
+    };
+    CanvasLayer.prototype.onLayerDidMount = function () {
+        //noop
+    };
+    CanvasLayer.prototype.onLayerDidUnmount = function () {
+        //noop
+    };
+    CanvasLayer.prototype.onLayerWillUnmount = function () {
+        //noop
+    };
+    CanvasLayer.prototype.onDrawLayer = function () {
+        //noop
+    };
+    return CanvasLayer;
+}(L$1.Layer));
 
 var Vector = /** @class */ (function () {
     function Vector(u, v) {
@@ -148,7 +222,7 @@ var Grid = /** @class */ (function () {
         if (iλ >= 0 && iφ >= 0 && iλ < this.width && iφ < this.height) {
             return this.interpolation(vλ, vφ, this.data[iλ + iφ * this.width], //l0c0
             this.data[jλ + iφ * this.width], //l0c1
-            this.data[iλ + jφ * this.width], //l1c0 
+            this.data[iλ + jφ * this.width], //l1c0
             this.data[jλ + jφ * this.width] //l1cl
             );
         }
@@ -165,8 +239,8 @@ var Grid = /** @class */ (function () {
      * @return interpolated vector
      */
     Grid.prototype.interpolation = function (x, y, g00, g10, g01, g11) {
-        var rx = (1 - x);
-        var ry = (1 - y);
+        var rx = 1 - x;
+        var ry = 1 - y;
         var a = rx * ry;
         var b = x * ry;
         var c = rx * y;
@@ -210,10 +284,10 @@ var ColorScale = /** @class */ (function () {
             "rgb(245,64,32)",
             "rgb(237,45,28)",
             "rgb(220,24,32)",
-            "rgb(180,0,35)"
+            "rgb(180,0,35)",
         ];
         this.setMinMax(minValue, maxValue);
-        if ((scale instanceof Array) && scale.length) {
+        if (scale instanceof Array && scale.length) {
             this.scale = scale;
         }
     }
@@ -235,7 +309,8 @@ var ColorScale = /** @class */ (function () {
         if (value >= this.maxValue) {
             return this.scale.length - 1;
         }
-        var index = this.scale.length * (value - this.minValue) / (this.maxValue - this.minValue);
+        var index = (this.scale.length * (value - this.minValue)) /
+            (this.maxValue - this.minValue);
         if (index < 0) {
             return 0;
         }
@@ -304,7 +379,8 @@ var Windy = /** @class */ (function () {
         this.animationLoop = null;
         this.then = 0;
         this.canvas = options.canvas;
-        if (options.minVelocity === undefined && options.maxVelocity === undefined) {
+        if (options.minVelocity === undefined &&
+            options.maxVelocity === undefined) {
             this.autoColorRange = true;
         }
         this.colorScale = new ColorScale(options.minVelocity || 0, options.maxVelocity || 10, options.colorScale);
@@ -318,8 +394,12 @@ var Windy = /** @class */ (function () {
     }
     Object.defineProperty(Windy.prototype, "particuleCount", {
         get: function () {
-            var particuleReduction = ((/android|blackberry|iemobile|ipad|iphone|ipod|opera mini|webos/i).test(navigator.userAgent)) ? (Math.pow(window.devicePixelRatio, 1 / 3) || 1.6) : 1;
-            return Math.round(this.layer.canvasBound.width * this.layer.canvasBound.height * this.particuleMultiplier) * particuleReduction;
+            var particuleReduction = /android|blackberry|iemobile|ipad|iphone|ipod|opera mini|webos/i.test(navigator.userAgent)
+                ? Math.pow(window.devicePixelRatio, 1 / 3) || 1.6
+                : 1;
+            return (Math.round(this.layer.canvasBound.width *
+                this.layer.canvasBound.height *
+                this.particuleMultiplier) * particuleReduction);
         },
         enumerable: false,
         configurable: true
@@ -333,7 +413,7 @@ var Windy = /** @class */ (function () {
         var vData = null;
         var grid = [];
         data.forEach(function (record) {
-            switch (record.header.parameterCategory + "," + record.header.parameterNumber) {
+            switch ("".concat(record.header.parameterCategory, ",").concat(record.header.parameterNumber)) {
                 case "1,2":
                 case "2,2":
                     uData = record;
@@ -424,156 +504,89 @@ var Windy = /** @class */ (function () {
     return Windy;
 }());
 
-/*! *****************************************************************************
-Copyright (c) Microsoft Corporation.
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
-***************************************************************************** */
-/* global Reflect, Promise */
-
-var extendStatics = function(d, b) {
-    extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return extendStatics(d, b);
-};
-
-function __extends(d, b) {
-    extendStatics(d, b);
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-}
-
-var __assign = function() {
-    __assign = Object.assign || function __assign(t) {
-        for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-        }
-        return t;
-    };
-    return __assign.apply(this, arguments);
-};
-
-var CanvasLayer = /** @class */ (function (_super) {
-    __extends(CanvasLayer, _super);
-    function CanvasLayer() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this._delegate = _this;
-        return _this;
+var Particule = /** @class */ (function () {
+    function Particule(x, y, maxAge) {
+        this.x = x;
+        this.y = y;
+        this.age = Math.floor(Math.random() * maxAge);
+        this.maxAge = maxAge;
     }
-    CanvasLayer.prototype.delegate = function (delegate) {
-        this._delegate = delegate;
-        return this;
+    Particule.prototype.reset = function (x, y) {
+        this.x = x;
+        this.y = y;
+        this.age = 0;
     };
-    CanvasLayer.prototype.needRedraw = function () {
-        if (!this._frame) {
-            this._frame = Util.requestAnimFrame(this.drawLayer, this);
-        }
-        return this;
+    Object.defineProperty(Particule.prototype, "isDead", {
+        get: function () {
+            return this.age > this.maxAge;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Particule.prototype.grow = function () {
+        this.age++;
     };
-    CanvasLayer.prototype._onLayerDidResize = function (resizeEvent) {
-        this.canvas.width = resizeEvent.newSize.x;
-        this.canvas.height = resizeEvent.newSize.y;
+    return Particule;
+}());
+
+var CanvasBound = /** @class */ (function () {
+    function CanvasBound(xMin, yMin, xMax, yMax) {
+        this.xMin = xMin;
+        this.yMin = yMin;
+        this.xMax = xMax;
+        this.yMax = yMax;
+    }
+    Object.defineProperty(CanvasBound.prototype, "width", {
+        get: function () {
+            return this.xMax - this.xMin;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(CanvasBound.prototype, "height", {
+        get: function () {
+            return this.yMax - this.yMin;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    CanvasBound.prototype.getRandomParticule = function (maxAge) {
+        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
+        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
+        return new Particule(x, y, maxAge);
     };
-    CanvasLayer.prototype._onLayerDidMove = function () {
-        var topLeft = this._map.containerPointToLayerPoint([0, 0]);
-        DomUtil.setPosition(this.canvas, topLeft);
-        this.canvas.getContext("2d").clearRect(0, 0, 3000, 3000);
-        this.drawLayer();
+    CanvasBound.prototype.resetParticule = function (p) {
+        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
+        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
+        p.reset(x, y);
+        return p;
     };
-    CanvasLayer.prototype.getEvents = function () {
-        var events = {
-            resize: this._onLayerDidResize,
-            moveend: this._onLayerDidMove,
-            zoomanim: undefined
-        };
-        if (this._map.options.zoomAnimation && Browser.any3d) {
-            events.zoomanim = this._animateZoom;
-        }
-        return events;
-    };
-    CanvasLayer.prototype.onAdd = function (map) {
-        this._map = map;
-        this.canvas = DomUtil.create('canvas', 'leaflet-layer');
-        var size = this._map.getSize();
-        this.canvas.width = size.x;
-        this.canvas.height = size.y;
-        var animated = this._map.options.zoomAnimation && Browser.any3d;
-        DomUtil.addClass(this.canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
-        map.getPane('overlayPane').appendChild(this.canvas);
-        this._delegate.onLayerDidMount && this._delegate.onLayerDidMount(); // -- callback
-        this.needRedraw();
-        this._onLayerDidMove();
-        return this;
-    };
-    CanvasLayer.prototype.onRemove = function (map) {
-        this._delegate.onLayerWillUnmount && this._delegate.onLayerWillUnmount(); // -- callback
-        map.getPanes().overlayPane.removeChild(this.canvas);
-        this.canvas = null;
-        return this;
-    };
-    CanvasLayer.prototype.addTo = function (map) {
-        map.addLayer(this);
-        return this;
-    };
-    CanvasLayer.prototype.LatLonToMercator = function (latlon) {
-        return {
-            x: latlon.lng * 6378137 * Math.PI / 180,
-            y: Math.log(Math.tan((90 + latlon.lat) * Math.PI / 360)) * 6378137
-        };
-    };
-    CanvasLayer.prototype.drawLayer = function () {
-        // -- todo make the viewInfo properties  flat objects.
-        var size = this._map.getSize();
-        var bounds = this._map.getBounds();
-        var zoom = this._map.getZoom();
-        var center = this.LatLonToMercator(this._map.getCenter());
-        var corner = this.LatLonToMercator(this._map.containerPointToLatLng(this._map.getSize()));
-        this._delegate.onDrawLayer && this._delegate.onDrawLayer({
-            layer: this,
-            canvas: this.canvas,
-            bounds: bounds,
-            size: size,
-            zoom: zoom,
-            center: center,
-            corner: corner
-        });
-        this._frame = null;
-    };
-    CanvasLayer.prototype._animateZoom = function (e) {
-        var scale = this._map.getZoomScale(e.zoom, this._map.getZoom());
-        var position = DomUtil.getPosition(this.canvas);
-        var viewHalf = this._map.getSize().multiplyBy(0.5);
-        var currentCenterPoint = this._map.project(this._map.getCenter(), e.zoom);
-        var destCenterPoint = this._map.project(e.center, e.zoom);
-        var centerOffset = destCenterPoint.subtract(currentCenterPoint);
-        var topLeftOffset = viewHalf.multiplyBy(-scale).add(position).add(viewHalf).subtract(centerOffset);
-        DomUtil.setTransform(this.canvas, topLeftOffset, scale);
-    };
-    CanvasLayer.prototype.onLayerDidMount = function () {
-        //noop
-    };
-    CanvasLayer.prototype.onLayerDidUnmount = function () {
-        //noop
-    };
-    CanvasLayer.prototype.onLayerWillUnmount = function () {
-        //noop
-    };
-    CanvasLayer.prototype.onDrawLayer = function () {
-        //noop
-    };
-    return CanvasLayer;
-}(Layer));
+    return CanvasBound;
+}());
+
+var MapBound = /** @class */ (function () {
+    function MapBound(north, east, south, west) {
+        this.north = (north * Math.PI) / 180;
+        this.east = (east * Math.PI) / 180;
+        this.south = (south * Math.PI) / 180;
+        this.west = (west * Math.PI) / 180;
+    }
+    Object.defineProperty(MapBound.prototype, "width", {
+        get: function () {
+            return (720 + this.east - this.west) % 360;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(MapBound.prototype, "height", {
+        get: function () {
+            return (360 + this.north - this.south) % 180;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    return MapBound;
+}());
 
 var layer = /** @class */ (function () {
     function layer(mapBound, canvasBound) {
@@ -588,12 +601,16 @@ var layer = /** @class */ (function () {
      */
     layer.prototype.canvasToMap = function (x, y) {
         var mapLonDelta = this.mapBound.east - this.mapBound.west;
-        var worldMapRadius = (this.canvasBound.width / this.rad2deg(mapLonDelta)) * 360 / (2 * Math.PI);
-        var mapOffsetY = (worldMapRadius / 2 * Math.log((1 + Math.sin(this.mapBound.south)) / (1 - Math.sin(this.mapBound.south))));
+        var worldMapRadius = ((this.canvasBound.width / this.rad2deg(mapLonDelta)) * 360) /
+            (2 * Math.PI);
+        var mapOffsetY = (worldMapRadius / 2) *
+            Math.log((1 + Math.sin(this.mapBound.south)) /
+                (1 - Math.sin(this.mapBound.south)));
         var equatorY = this.canvasBound.height + mapOffsetY;
         var a = (equatorY - y) / worldMapRadius;
-        var φ = 180 / Math.PI * (2 * Math.atan(Math.exp(a)) - Math.PI / 2);
-        var λ = this.rad2deg(this.mapBound.west) + x / this.canvasBound.width * this.rad2deg(mapLonDelta);
+        var φ = (180 / Math.PI) * (2 * Math.atan(Math.exp(a)) - Math.PI / 2);
+        var λ = this.rad2deg(this.mapBound.west) +
+            (x / this.canvasBound.width) * this.rad2deg(mapLonDelta);
         return [λ, φ];
     };
     layer.prototype.mercY = function (φ) {
@@ -616,10 +633,10 @@ var layer = /** @class */ (function () {
         return [x, y];
     };
     layer.prototype.deg2rad = function (deg) {
-        return deg * Math.PI / 180;
+        return (deg * Math.PI) / 180;
     };
     layer.prototype.rad2deg = function (rad) {
-        return rad * 180 / Math.PI;
+        return (rad * 180) / Math.PI;
     };
     /**
      *
@@ -639,12 +656,12 @@ var layer = /** @class */ (function () {
         var pφ = this.mapToCanvas(λ, φ + hφ);
         // Meridian scale factor (see Snyder, equation 4-3), where R = 1. This handles issue where length of 1º λ
         // changes depending on φ. Without this, there is a pinching effect at the poles.
-        var k = Math.cos(φ / 360 * τ);
+        var k = Math.cos((φ / 360) * τ);
         return [
             (pλ[0] - x) / hλ / k,
             (pλ[1] - y) / hλ / k,
             (pφ[0] - x) / hφ,
-            (pφ[1] - y) / hφ
+            (pφ[1] - y) / hφ,
         ];
     };
     /**
@@ -685,7 +702,7 @@ var VelocityControl = /** @class */ (function (_super) {
             speedUnit: "m/s",
             directionString: "Direction",
             speedString: "Speed",
-            velocityType: '',
+            velocityType: "",
             onAdd: undefined,
             onRemove: undefined,
             leafletVelocity: undefined,
@@ -694,8 +711,8 @@ var VelocityControl = /** @class */ (function (_super) {
     }
     VelocityControl.prototype.onAdd = function (map) {
         this._map = map;
-        this._container = DomUtil.create("div", "leaflet-control-velocity");
-        DomEvent.disableClickPropagation(this._container);
+        this._container = L$1.DomUtil.create("div", "leaflet-control-velocity");
+        L$1.DomEvent.disableClickPropagation(this._container);
         map.on("mousemove", this._onMouseMove, this);
         this._container.innerHTML = this.options.emptyString;
         if (this.options.leafletVelocity.options.onAdd) {
@@ -742,54 +759,54 @@ var VelocityControl = /** @class */ (function (_super) {
         return velocityDirToDegrees;
     };
     VelocityControl.prototype.degreesToCardinalDirection = function (deg) {
-        var cardinalDirection = '';
-        if (deg >= 0 && deg < 11.25 || deg >= 348.75) {
-            cardinalDirection = 'N';
+        var cardinalDirection = "";
+        if ((deg >= 0 && deg < 11.25) || deg >= 348.75) {
+            cardinalDirection = "N";
         }
         else if (deg >= 11.25 && deg < 33.75) {
-            cardinalDirection = 'NNW';
+            cardinalDirection = "NNW";
         }
         else if (deg >= 33.75 && deg < 56.25) {
-            cardinalDirection = 'NW';
+            cardinalDirection = "NW";
         }
         else if (deg >= 56.25 && deg < 78.75) {
-            cardinalDirection = 'WNW';
+            cardinalDirection = "WNW";
         }
         else if (deg >= 78.25 && deg < 101.25) {
-            cardinalDirection = 'W';
+            cardinalDirection = "W";
         }
         else if (deg >= 101.25 && deg < 123.75) {
-            cardinalDirection = 'WSW';
+            cardinalDirection = "WSW";
         }
         else if (deg >= 123.75 && deg < 146.25) {
-            cardinalDirection = 'SW';
+            cardinalDirection = "SW";
         }
         else if (deg >= 146.25 && deg < 168.75) {
-            cardinalDirection = 'SSW';
+            cardinalDirection = "SSW";
         }
         else if (deg >= 168.75 && deg < 191.25) {
-            cardinalDirection = 'S';
+            cardinalDirection = "S";
         }
         else if (deg >= 191.25 && deg < 213.75) {
-            cardinalDirection = 'SSE';
+            cardinalDirection = "SSE";
         }
         else if (deg >= 213.75 && deg < 236.25) {
-            cardinalDirection = 'SE';
+            cardinalDirection = "SE";
         }
         else if (deg >= 236.25 && deg < 258.75) {
-            cardinalDirection = 'ESE';
+            cardinalDirection = "ESE";
         }
         else if (deg >= 258.75 && deg < 281.25) {
-            cardinalDirection = 'E';
+            cardinalDirection = "E";
         }
         else if (deg >= 281.25 && deg < 303.75) {
-            cardinalDirection = 'ENE';
+            cardinalDirection = "ENE";
         }
         else if (deg >= 303.75 && deg < 326.25) {
-            cardinalDirection = 'NE';
+            cardinalDirection = "NE";
         }
         else if (deg >= 326.25 && deg < 348.75) {
-            cardinalDirection = 'NNE';
+            cardinalDirection = "NNE";
         }
         return cardinalDirection;
     };
@@ -803,28 +820,33 @@ var VelocityControl = /** @class */ (function (_super) {
         return meters * 2.23694;
     };
     VelocityControl.prototype._onMouseMove = function (e) {
-        var self = this;
-        var pos = this._map.containerPointToLatLng(point(e.containerPoint.x, e.containerPoint.y));
+        var pos = this._map.containerPointToLatLng(L$1.point(e.containerPoint.x, e.containerPoint.y));
         var gridValue = this.options.leafletVelocity.windy.grid.get(pos.lng, pos.lat);
         var htmlOut = "";
         if (gridValue && !isNaN(gridValue.u) && !isNaN(gridValue.v)) {
-            var deg = self.vectorToDegrees(gridValue.u, gridValue.v, this.options.angleConvention);
-            var cardinal = this.options.showCardinal ? " (" + self.degreesToCardinalDirection(deg) + ") " : '';
-            htmlOut = "<strong> " + this.options.velocityType + " " + this.options.directionString + ": </strong> " + deg.toFixed(2) + "\u00B0" + cardinal + ", <strong> " + this.options.velocityType + " " + this.options.speedString + ": </strong> " + self
-                .vectorToSpeed(gridValue.u, gridValue.v, this.options.speedUnit)
-                .toFixed(2) + " " + this.options.speedUnit;
+            var deg = this.vectorToDegrees(gridValue.u, gridValue.v, this.options.angleConvention);
+            var cardinal = this.options.showCardinal
+                ? " (".concat(this.degreesToCardinalDirection(deg), ") ")
+                : "";
+            htmlOut = "<strong> ".concat(this.options.velocityType, " ").concat(this.options.directionString, ": </strong> ").concat(deg.toFixed(2), "\u00B0").concat(cardinal, ", <strong> ").concat(this.options.velocityType, " ").concat(this.options.speedString, ": </strong> ").concat(this.vectorToSpeed(gridValue.u, gridValue.v, this.options.speedUnit).toFixed(2), " ").concat(this.options.speedUnit);
         }
         else {
             htmlOut = this.options.emptyString;
         }
-        self._container.innerHTML = htmlOut;
+        this._container.innerHTML = htmlOut;
     };
     return VelocityControl;
-}(Control));
-var ExtendedLControl = Object.assign(Control, { Velocity: Control.extend(new VelocityControl()) });
-var extendedLControl = Object.assign(control, { velocity: function (options) { return new ExtendedLControl.Velocity(options); } });
+}(L$1.Control));
+var ExtendedLControl = Object.assign(L$1.Control, {
+    Velocity: L$1.Control.extend(new VelocityControl()),
+});
+var extendedLControl = Object.assign(L$1.control, {
+    velocity: function (options) {
+        return new ExtendedLControl.Velocity(options);
+    },
+});
 
-var L_CanvasLayer = (Layer ? Layer : Class).extend(new CanvasLayer());
+var L_CanvasLayer = (L$1.Layer ? L$1.Layer : L$1.Class).extend(new CanvasLayer());
 var L_canvasLayer = function () {
     return new L_CanvasLayer();
 };
@@ -839,23 +861,23 @@ var VelocityLayer = /** @class */ (function (_super) {
         _this.options = {
             displayValues: true,
             displayOptions: {
-                velocityType: 'Wind',
-                position: 'topright',
-                emptyString: '--',
-                angleConvention: 'bearingCCW',
+                velocityType: "Wind",
+                position: "topright",
+                emptyString: "--",
+                angleConvention: "bearingCCW",
                 showCardinal: true,
-                speedUnit: 'm/s',
-                directionString: 'Direction',
-                speedString: 'Speed',
+                speedUnit: "m/s",
+                directionString: "Direction",
+                speedString: "Speed",
             },
             maxVelocity: 10,
             colorScale: null,
-            data: null
+            data: null,
         };
         return _this;
     }
     VelocityLayer.prototype.initialize = function (options) {
-        Util.setOptions(this, options);
+        L$1.Util.setOptions(this, options);
     };
     VelocityLayer.prototype.onAdd = function (map) {
         // create canvas, add overlay control
@@ -874,11 +896,11 @@ var VelocityLayer = /** @class */ (function (_super) {
             this.windy.setData(data);
             this._clearAndRestart();
         }
-        this.fire('load');
+        this.fire("load");
     };
     /*------------------------------------ PRIVATE ------------------------------------------*/
     VelocityLayer.prototype.onDrawLayer = function () {
-        var self = this;
+        var _this = this;
         if (!this.windy) {
             this._initWindy();
             return;
@@ -887,9 +909,9 @@ var VelocityLayer = /** @class */ (function (_super) {
             return;
         }
         if (this._displayTimeout)
-            clearTimeout(self._displayTimeout);
+            clearTimeout(this._displayTimeout);
         this._displayTimeout = setTimeout(function () {
-            self._startWindy();
+            _this._startWindy();
         }, 150); // showing velocity is delayed
     };
     VelocityLayer.prototype._startWindy = function () {
@@ -902,7 +924,7 @@ var VelocityLayer = /** @class */ (function (_super) {
         // windy object, copy options
         this.windy = new Windy(__assign({ canvas: this._canvasLayer.canvas }, this.options));
         // prepare context global var, start drawing
-        this._context = this._canvasLayer.canvas.getContext('2d');
+        this._context = this._canvasLayer.canvas.getContext("2d");
         this._canvasLayer.canvas.classList.add("velocity-overlay");
         this.onDrawLayer();
         this._initMouseHandler(false);
@@ -913,20 +935,20 @@ var VelocityLayer = /** @class */ (function (_super) {
         if (bind === void 0) { bind = true; }
         if (this._events === null) {
             this._events = {
-                'dragstart': function () {
+                dragstart: function () {
                     _this.windy.stop();
                 },
-                'zoomstart': function () {
+                zoomstart: function () {
                     _this.windy.stop();
                 },
-                'resize': function () {
+                resize: function () {
                     _this._clearWind();
-                }
+                },
             };
         }
         for (var e in this._events) {
-            if (this._events.hasOwnProperty(e)) {
-                this._map[bind ? 'on' : 'off'](e, this._events[e]);
+            if (Object.prototype.hasOwnProperty.call(this._events, e)) {
+                this._map[bind ? "on" : "off"](e, this._events[e]);
             }
         }
     };
@@ -968,11 +990,8 @@ var VelocityLayer = /** @class */ (function (_super) {
         this._map.removeLayer(this._canvasLayer);
     };
     return VelocityLayer;
-}(Layer));
+}(L$1.Layer));
 
-window.CanvasBound = CanvasBound;
-window.MapBound = MapBound;
-window.Windy = Windy;
 var L = window.L;
 L.CanvasLayer = (L.Layer ? L.Layer : L.Class).extend(new CanvasLayer());
 L.canvasLayer = function () {
@@ -985,3 +1004,4 @@ var velocityLayer = function (options) {
 L.velocityLayer = velocityLayer;
 
 export { velocityLayer };
+//# sourceMappingURL=bundle.es.js.map
