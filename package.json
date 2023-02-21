@@ -7,7 +7,8 @@
   "types": "types/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "node build/index.js"
+    "build": "node build/index.js",
+    "lint": "npx eslint . --ext .ts,.js --fix --ignore-path .gitignore"
   },
   "files": [
     "dist/*.js",
@@ -16,13 +17,19 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "rollup": "^1.1.2",
-    "rollup-plugin-typescript": "^1.0.0",
-    "tslib": "^1.9.3",
-    "typescript": "^3.2.4"
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "eslint": "^8.34.0",
+    "eslint-config-prettier": "^8.6.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.8.4",
+    "rollup": "^3.17.2",
+    "rollup-plugin-typescript": "^1.0.1",
+    "tslib": "^2.5.0",
+    "typescript": "^4.9.5"
   },
   "dependencies": {
-    "@types/leaflet": "^1.2.0",
-    "leaflet": "^1.2.0"
+    "@types/leaflet": "^1.9.1",
+    "leaflet": "^1.9.3"
   }
 }
