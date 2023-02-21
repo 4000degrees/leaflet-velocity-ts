@@ -1,41 +1,58 @@
-import Windy from './windy';
+import Windy, { WindyOptions } from './windy';
 import CanvasBound from './canvasBound'
 import MapBound from './mapBound';
 import Layer from "./layer";
 import CanvasLayer from './L.CanvasLayer';
 import * as L from 'leaflet';
-
+import { extendedLControl, VelocityControlOptions } from './L.Control.Velocity'
+import VelocityControl from './L.Control.Velocity'
+import { GfsDataset } from './gfs-dataset.model';
 
 const L_CanvasLayer = (L.Layer ? L.Layer : L.Class).extend(new CanvasLayer());
 let L_canvasLayer = function () {
 	return new L_CanvasLayer();
 };
 
-export default class VelocityLayer {
+export interface VelocityLayerOptions extends Partial<WindyOptions> {
+	displayValues: boolean,
+	displayOptions: VelocityControlOptions,
+	data: GfsDataset,
+	onAdd?: Function,
+    onRemove?: Function,
+}
 
-    private options: any;
+export default class VelocityLayer extends L.Layer {
+
+    public options: VelocityLayerOptions;
+	public windy: Windy;
     private _map: L.Map = null;
-	private _canvasLayer: any = null;
-	private _windy: Windy = null;
-	private _context: any = null;
-	private _displayTimeout: number = 0;
-	private _events: Object = null
+	private _canvasLayer: CanvasLayer = null;
+	private _context: CanvasRenderingContext2D = null;
+	private _displayTimeout: ReturnType<typeof setTimeout>;
+	private _events: Record<string, L.LeafletEventHandlerFn> = null
+	private _mouseControl: VelocityControl
     
     constructor () {
+		super()
         this.options = {
             displayValues: true,
-            displayOptions: {
-                velocityType: 'Velocity',
-                position: 'bottomleft',
-                emptyString: 'No velocity data'
-            },
+			displayOptions: {
+				velocityType: 'Wind',
+				position: 'topright',
+				emptyString: '--',
+				angleConvention: 'bearingCCW',
+				showCardinal: true,
+				speedUnit: 'm/s',
+				directionString: 'Direction',
+				speedString: 'Speed',
+			},
             maxVelocity: 10, // used to align color scale
             colorScale: null,
             data: null
 		};
     }
 
-	initialize(options: any) {
+	initialize(options: VelocityLayerOptions) {
 		L.Util.setOptions(this, options);
 	}
 
@@ -44,29 +61,31 @@ export default class VelocityLayer {
 		this._canvasLayer = L_canvasLayer().delegate(this);
 		this._canvasLayer.addTo(map);
 		this._map = map;
+		return this
 	}
 
-	onRemove(map: any) {
+	onRemove() {
 		this._destroyWind();
+		return this
 	}
 
-	setData(data: any) {
+	setData(data: GfsDataset) {
 		this.options.data = data;
 
-		if (this._windy) {
-			this._windy.setData(data);
+		if (this.windy) {
+			this.windy.setData(data);
 			this._clearAndRestart();
 		}
 
-		(<any>this).fire('load');
+		this.fire('load');
 	}
 
 	/*------------------------------------ PRIVATE ------------------------------------------*/
 
-	onDrawLayer(overlay: any, params: any) {
+	onDrawLayer() {
 		var self = this;
 
-		if (!this._windy) {
+		if (!this.windy) {
 			this._initWindy();
 			return;
 		}
@@ -87,7 +106,7 @@ export default class VelocityLayer {
 		var size = this._map.getSize();
 
 		// bounds, width, height, extent
-		this._windy.start(
+		this.windy.start(
 			new Layer(
 				new MapBound(
 					bounds.getNorthEast().lat,
@@ -104,13 +123,14 @@ export default class VelocityLayer {
 	_initWindy() {
 
 		// windy object, copy options
-		const options = (<any>Object).assign({ canvas: this._canvasLayer._canvas }, this.options);
-		this._windy = new Windy(options);
+		this.windy = new Windy({ canvas: this._canvasLayer.canvas, ...this.options });
 
 		// prepare context global var, start drawing
-		this._context = this._canvasLayer._canvas.getContext('2d');
-		this._canvasLayer._canvas.classList.add("velocity-overlay");
-		(<any>this).onDrawLayer();
+		this._context = this._canvasLayer.canvas.getContext('2d');
+		this._canvasLayer.canvas.classList.add("velocity-overlay");
+		this.onDrawLayer();
+
+		this._initMouseHandler(false);
 
 		this._toggleEvents(true)
 	}
@@ -119,10 +139,10 @@ export default class VelocityLayer {
 		if(this._events === null) {
 			this._events = {
 				'dragstart': () => {
-					this._windy.stop();
+					this.windy.stop();
 				},
 				'zoomstart': () => {
-					this._windy.stop();
+					this.windy.stop();
 				},
 				'resize': () => {
 					this._clearWind();
@@ -137,24 +157,37 @@ export default class VelocityLayer {
 	}
 
 
+	_initMouseHandler(voidPrevious: boolean) {
+		if (voidPrevious) {
+		  this._map.removeControl(this._mouseControl);
+		  this._mouseControl = null;
+		}
+		if (!this._mouseControl && this.options.displayValues) {
+		  var options = {...this.options.displayOptions, leafletVelocity: this};
+		  this._mouseControl = extendedLControl.velocity(options).addTo(this._map);
+		}
+	  }
+
 
 	_clearAndRestart(){
 		if (this._context) this._context.clearRect(0, 0, 3000, 3000);
-		if (this._windy) this._startWindy();
+		if (this.windy) this._startWindy();
 	}
 
 	_clearWind() {
-		if (this._windy) this._windy.stop();
+		if (this.windy) this.windy.stop();
 		if (this._context) this._context.clearRect(0, 0, 3000, 3000);
 	}
 
 	_destroyWind() {
 		if (this._displayTimeout) clearTimeout(this._displayTimeout);
-		if (this._windy) this._windy.stop();
+		if (this.windy) this.windy.stop();
 		if (this._context) this._context.clearRect(0, 0, 3000, 3000);
 		//off event bind
 		this._toggleEvents(false)
-		this._windy = null;
+		this.windy = null;
+		if (this._mouseControl) this._map.removeControl(this._mouseControl);
+		this._mouseControl = null;
 		this._map.removeLayer(this._canvasLayer);
 	}
 }

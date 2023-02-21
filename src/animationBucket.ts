@@ -30,7 +30,7 @@ export default class AnimationBucket {
         this.buckets[index].push(p);
     }
 
-    draw (context2D: any) {
+    draw (context2D: CanvasRenderingContext2D) {
         this.buckets.forEach((bucket: Particule[], i: number) => {
             if (bucket.length > 0) {
                 context2D.beginPath();

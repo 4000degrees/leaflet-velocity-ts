@@ -3,6 +3,8 @@ import MapBound from "./mapBound";
 import Windy from "./windy";
 import CanvasLayer from "./L.CanvasLayer";
 import VelocityLayer from "./L.VelocityLayer";
+import VelocityControl from './L.Control.Velocity'
+import { VelocityControlOptions } from './L.Control.Velocity'
 
 (<any>window).CanvasBound = CanvasBound;
 (<any>window).MapBound = MapBound;

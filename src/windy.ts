@@ -6,11 +6,25 @@ import CanvasBound from "./canvasBound";
 import Particule from "./particle";
 import AnimationBucket from "./animationBucket";
 import Layer from "./layer";
+import { GfsDataset, GfsRecord } from "./gfs-dataset.model";
+
+export interface WindyOptions {
+    canvas: HTMLCanvasElement,
+    data: GfsDataset,
+    minVelocity?: number,
+    maxVelocity?: number,
+	colorScale?: string[],
+    velocityScale?: number,
+    particleAge?: number,
+    particleMultiplier?: number,
+    lineWidth?: number,
+    frameRate?: number
+}
 
 export default class Windy {
 
-    private grid: Grid;
-    private canvas: any = null;
+    public grid: Grid;
+    private canvas: HTMLCanvasElement = null;
     private colorScale: ColorScale;
     private velocityScale: number;
     private particuleMultiplier =  1 / 300;
@@ -21,13 +35,13 @@ export default class Windy {
     private layer: Layer;
     private particules: Particule[] = [];
     private animationBucket: AnimationBucket;
-    private context2D: any;
-    private animationLoop: any = null;
+    private context2D: CanvasRenderingContext2D;
+    private animationLoop: number = null;
     private frameTime: number;
     private then = 0;
      
 
-    constructor(options: any) {
+    constructor(options: WindyOptions) {
         this.canvas = options.canvas;
         if (options.minVelocity === undefined && options.maxVelocity === undefined) {
             this.autoColorRange = true;
@@ -51,9 +65,9 @@ export default class Windy {
      * Load data
      * @param data
      */
-    setData(data: any[]) {
-        let uData: any = null;
-        let vData: any = null;
+    setData(data: GfsDataset) {
+        let uData: GfsRecord = null;
+        let vData: GfsRecord = null;
         const grid: Vector[] = [];
 
         data.forEach((record) => {

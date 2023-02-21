@@ -1,22 +1,14 @@
 import * as L from 'leaflet';
 
-export default class CanvasLayer {
-	private _map: any;
-	private _canvas: any;
-	private _frame: any;
-	private _delegate: any;
-	private tiles: any;
 
-	initialize (options: any) {
-		this._map    = null;
-		this._canvas = null;
-		this._frame  = null;
-		this._delegate = null;
-		L.Util.setOptions(this, options);
-	}
+export default class CanvasLayer extends L.Layer implements DelegateLayer {
+	public canvas: HTMLCanvasElement;
+	private _map: L.Map;
+	private _frame: number;
+	private _delegate: DelegateLayer = this;
 
-	delegate (del: any): CanvasLayer {
-		this._delegate = del;
+	delegate (delegate: DelegateLayer): CanvasLayer {
+		this._delegate = delegate;
 		return this;
 	}
 
@@ -27,27 +19,25 @@ export default class CanvasLayer {
 		return this;
 	}
 
-	//-------------------------------------------------------------
-	_onLayerDidResize (resizeEvent: any) {
-		this._canvas.width = resizeEvent.newSize.x;
-		this._canvas.height = resizeEvent.newSize.y;
+	_onLayerDidResize (resizeEvent: L.ResizeEvent) {
+		this.canvas.width = resizeEvent.newSize.x;
+		this.canvas.height = resizeEvent.newSize.y;
 	}
 	
-	//-------------------------------------------------------------
 	_onLayerDidMove () {
 		var topLeft = this._map.containerPointToLayerPoint([0, 0]);
-		L.DomUtil.setPosition(this._canvas, topLeft);
-		this._canvas.getContext("2d").clearRect(0, 0, 3000, 3000)
+		L.DomUtil.setPosition(this.canvas, topLeft);
+		this.canvas.getContext("2d").clearRect(0, 0, 3000, 3000)
 		this.drawLayer();
 	}
 	
-	//-------------------------------------------------------------
 	getEvents () {
-		var events = {
+		var events: Record<string, (event: any) => void> = {
 			resize: this._onLayerDidResize,
 			moveend: this._onLayerDidMove,
-			zoomanim: <any>undefined
+			zoomanim: undefined
 		};
+
 		if (this._map.options.zoomAnimation && L.Browser.any3d) {
 			events.zoomanim =  this._animateZoom;
 		}
@@ -55,45 +45,42 @@ export default class CanvasLayer {
 		return events;
 	}
 	
-	//-------------------------------------------------------------
-	onAdd (map: any) {
+	onAdd (map: L.Map) {
 		this._map = map;
-		this._canvas = L.DomUtil.create('canvas', 'leaflet-layer');
-		this.tiles = {};
+		this.canvas = L.DomUtil.create('canvas', 'leaflet-layer') as HTMLCanvasElement;
 
 		var size = this._map.getSize();
-		this._canvas.width = size.x;
-		this._canvas.height = size.y;
+		this.canvas.width = size.x;
+		this.canvas.height = size.y;
 
 		var animated = this._map.options.zoomAnimation && L.Browser.any3d;
-		L.DomUtil.addClass(this._canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
+		L.DomUtil.addClass(this.canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
 
-		map._panes.overlayPane.appendChild(this._canvas);
+		map.getPane('overlayPane').appendChild(this.canvas);
 
-		var del = this._delegate || this;
-		del.onLayerDidMount && del.onLayerDidMount(); // -- callback
+		this._delegate.onLayerDidMount && this._delegate.onLayerDidMount(); // -- callback
 		this.needRedraw();
 
 		this._onLayerDidMove();
+
+		return this
 	}
 
-	//-------------------------------------------------------------
-	onRemove (map: any) {
-		var del = this._delegate || this;
-		del.onLayerWillUnmount && del.onLayerWillUnmount(); // -- callback
+	onRemove (map: L.Map) {
+		this._delegate.onLayerWillUnmount && this._delegate.onLayerWillUnmount(); // -- callback
 
-		map.getPanes().overlayPane.removeChild(this._canvas);
+		map.getPanes().overlayPane.removeChild(this.canvas);
 
-		this._canvas = null;
+		this.canvas = null;
+
+		return this
 	}
 
-	//------------------------------------------------------------
-	addTo (map: any) {
+	addTo (map: L.Map) {
 		map.addLayer(this);
 		return this;
 	}
 	
-	// --------------------------------------------------------------------------------
 	LatLonToMercator (latlon: L.LatLng) {
 		return {
 			x: latlon.lng * 6378137 * Math.PI / 180,
@@ -101,7 +88,6 @@ export default class CanvasLayer {
 		};
 	}
 
-	//------------------------------------------------------------------------------
 	drawLayer () {
 		// -- todo make the viewInfo properties  flat objects.
 		var size   = this._map.getSize();
@@ -111,10 +97,9 @@ export default class CanvasLayer {
 		var center = this.LatLonToMercator(this._map.getCenter());
 		var corner = this.LatLonToMercator(this._map.containerPointToLatLng(this._map.getSize()));
 
-		var del = this._delegate || this;
-		del.onDrawLayer && del.onDrawLayer( {
+		this._delegate.onDrawLayer && this._delegate.onDrawLayer( {
 			layer : this,
-			canvas: this._canvas,
+			canvas: this.canvas,
 			bounds: bounds,
 			size: size,
 			zoom: zoom,
@@ -123,26 +108,43 @@ export default class CanvasLayer {
 		});
 		this._frame = null;
 	}
-	
-	// -- L.DomUtil.setTransform from leaflet 1.0.0 to work on 0.0.7
-	//------------------------------------------------------------------------------
-	_setTransform (el: any, offset: any, scale: any) {
-		var pos = offset || new L.Point(0, 0);
 
-		el.style[L.DomUtil.TRANSFORM] =
-			(L.Browser.ie3d ?
-			'translate(' + pos.x + 'px,' + pos.y + 'px)' :
-			'translate3d(' + pos.x + 'px,' + pos.y + 'px,0)') +
-			(scale ? ' scale(' + scale + ')' : '');
+	_animateZoom (e: L.ZoomAnimEvent) {
+		const scale = this._map.getZoomScale(e.zoom, this._map.getZoom());
+		const position = L.DomUtil.getPosition(this.canvas)
+		const viewHalf = this._map.getSize().multiplyBy(0.5)
+		const currentCenterPoint = this._map.project(this._map.getCenter(), e.zoom)
+		const destCenterPoint = this._map.project(e.center, e.zoom)
+		const centerOffset = destCenterPoint.subtract(currentCenterPoint)
+		const topLeftOffset = viewHalf.multiplyBy(-scale).add(position).add(viewHalf).subtract(centerOffset)
+		L.DomUtil.setTransform(this.canvas, topLeftOffset, scale);
 	}
 
-	//------------------------------------------------------------------------------
-	_animateZoom (e: any) {
-		var scale = this._map.getZoomScale(e.zoom);
-		// -- different calc of offset in leaflet 1.0.0 and 0.0.7 thanks for 1.0.0-rc2 calc @jduggan1
-		var offset = L.Layer ? this._map._latLngToNewLayerPoint(this._map.getBounds().getNorthWest(), e.zoom, e.center) :
-			this._map._getCenterOffset(e.center)._multiplyBy(-scale).subtract(this._map._getMapPanePos());
-
-		L.DomUtil.setTransform(this._canvas, offset, scale);
+	onLayerDidMount() {
+		//noop
 	}
+	onLayerDidUnmount() {
+		//noop
+	}
+	onLayerWillUnmount() {
+		//noop
+	}
+	onDrawLayer() {
+		//noop
+	}
+}
+
+export interface DelegateLayer {
+	onLayerDidMount?: () => void,
+	onLayerDidUnmount?: () => void,
+	onLayerWillUnmount?: () => void,
+	onDrawLayer?: (data: {
+			layer : CanvasLayer,
+			canvas: HTMLCanvasElement,
+			bounds: L.LatLngBounds,
+			size: L.Point,
+			zoom: number,
+			center : { x: number, y: number },
+			corner : { x: number, y: number }
+	}) => void
 }
