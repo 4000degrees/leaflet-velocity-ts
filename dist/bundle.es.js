@@ -1,4 +1,4 @@
-import { Util, DomUtil, Browser, Point, Layer, Class } from 'leaflet';
+import { Util, DomUtil, Browser, Layer, DomEvent, point, Control, control, Class } from 'leaflet';
 
 var Particule = /** @class */ (function () {
     function Particule(x, y, maxAge) {
@@ -424,18 +424,55 @@ var Windy = /** @class */ (function () {
     return Windy;
 }());
 
-var CanvasLayer = /** @class */ (function () {
-    function CanvasLayer() {
-    }
-    CanvasLayer.prototype.initialize = function (options) {
-        this._map = null;
-        this._canvas = null;
-        this._frame = null;
-        this._delegate = null;
-        Util.setOptions(this, options);
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+/* global Reflect, Promise */
+
+var extendStatics = function(d, b) {
+    extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return extendStatics(d, b);
+};
+
+function __extends(d, b) {
+    extendStatics(d, b);
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+}
+
+var __assign = function() {
+    __assign = Object.assign || function __assign(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
+        }
+        return t;
     };
-    CanvasLayer.prototype.delegate = function (del) {
-        this._delegate = del;
+    return __assign.apply(this, arguments);
+};
+
+var CanvasLayer = /** @class */ (function (_super) {
+    __extends(CanvasLayer, _super);
+    function CanvasLayer() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this._delegate = _this;
+        return _this;
+    }
+    CanvasLayer.prototype.delegate = function (delegate) {
+        this._delegate = delegate;
         return this;
     };
     CanvasLayer.prototype.needRedraw = function () {
@@ -444,19 +481,16 @@ var CanvasLayer = /** @class */ (function () {
         }
         return this;
     };
-    //-------------------------------------------------------------
     CanvasLayer.prototype._onLayerDidResize = function (resizeEvent) {
-        this._canvas.width = resizeEvent.newSize.x;
-        this._canvas.height = resizeEvent.newSize.y;
+        this.canvas.width = resizeEvent.newSize.x;
+        this.canvas.height = resizeEvent.newSize.y;
     };
-    //-------------------------------------------------------------
     CanvasLayer.prototype._onLayerDidMove = function () {
         var topLeft = this._map.containerPointToLayerPoint([0, 0]);
-        DomUtil.setPosition(this._canvas, topLeft);
-        this._canvas.getContext("2d").clearRect(0, 0, 3000, 3000);
+        DomUtil.setPosition(this.canvas, topLeft);
+        this.canvas.getContext("2d").clearRect(0, 0, 3000, 3000);
         this.drawLayer();
     };
-    //-------------------------------------------------------------
     CanvasLayer.prototype.getEvents = function () {
         var events = {
             resize: this._onLayerDidResize,
@@ -468,42 +502,36 @@ var CanvasLayer = /** @class */ (function () {
         }
         return events;
     };
-    //-------------------------------------------------------------
     CanvasLayer.prototype.onAdd = function (map) {
         this._map = map;
-        this._canvas = DomUtil.create('canvas', 'leaflet-layer');
-        this.tiles = {};
+        this.canvas = DomUtil.create('canvas', 'leaflet-layer');
         var size = this._map.getSize();
-        this._canvas.width = size.x;
-        this._canvas.height = size.y;
+        this.canvas.width = size.x;
+        this.canvas.height = size.y;
         var animated = this._map.options.zoomAnimation && Browser.any3d;
-        DomUtil.addClass(this._canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
-        map._panes.overlayPane.appendChild(this._canvas);
-        var del = this._delegate || this;
-        del.onLayerDidMount && del.onLayerDidMount(); // -- callback
+        DomUtil.addClass(this.canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
+        map.getPane('overlayPane').appendChild(this.canvas);
+        this._delegate.onLayerDidMount && this._delegate.onLayerDidMount(); // -- callback
         this.needRedraw();
         this._onLayerDidMove();
+        return this;
     };
-    //-------------------------------------------------------------
     CanvasLayer.prototype.onRemove = function (map) {
-        var del = this._delegate || this;
-        del.onLayerWillUnmount && del.onLayerWillUnmount(); // -- callback
-        map.getPanes().overlayPane.removeChild(this._canvas);
-        this._canvas = null;
+        this._delegate.onLayerWillUnmount && this._delegate.onLayerWillUnmount(); // -- callback
+        map.getPanes().overlayPane.removeChild(this.canvas);
+        this.canvas = null;
+        return this;
     };
-    //------------------------------------------------------------
     CanvasLayer.prototype.addTo = function (map) {
         map.addLayer(this);
         return this;
     };
-    // --------------------------------------------------------------------------------
     CanvasLayer.prototype.LatLonToMercator = function (latlon) {
         return {
             x: latlon.lng * 6378137 * Math.PI / 180,
             y: Math.log(Math.tan((90 + latlon.lat) * Math.PI / 360)) * 6378137
         };
     };
-    //------------------------------------------------------------------------------
     CanvasLayer.prototype.drawLayer = function () {
         // -- todo make the viewInfo properties  flat objects.
         var size = this._map.getSize();
@@ -511,10 +539,9 @@ var CanvasLayer = /** @class */ (function () {
         var zoom = this._map.getZoom();
         var center = this.LatLonToMercator(this._map.getCenter());
         var corner = this.LatLonToMercator(this._map.containerPointToLatLng(this._map.getSize()));
-        var del = this._delegate || this;
-        del.onDrawLayer && del.onDrawLayer({
+        this._delegate.onDrawLayer && this._delegate.onDrawLayer({
             layer: this,
-            canvas: this._canvas,
+            canvas: this.canvas,
             bounds: bounds,
             size: size,
             zoom: zoom,
@@ -523,26 +550,30 @@ var CanvasLayer = /** @class */ (function () {
         });
         this._frame = null;
     };
-    // -- L.DomUtil.setTransform from leaflet 1.0.0 to work on 0.0.7
-    //------------------------------------------------------------------------------
-    CanvasLayer.prototype._setTransform = function (el, offset, scale) {
-        var pos = offset || new Point(0, 0);
-        el.style[DomUtil.TRANSFORM] =
-            (Browser.ie3d ?
-                'translate(' + pos.x + 'px,' + pos.y + 'px)' :
-                'translate3d(' + pos.x + 'px,' + pos.y + 'px,0)') +
-                (scale ? ' scale(' + scale + ')' : '');
-    };
-    //------------------------------------------------------------------------------
     CanvasLayer.prototype._animateZoom = function (e) {
-        var scale = this._map.getZoomScale(e.zoom);
-        // -- different calc of offset in leaflet 1.0.0 and 0.0.7 thanks for 1.0.0-rc2 calc @jduggan1
-        var offset = Layer ? this._map._latLngToNewLayerPoint(this._map.getBounds().getNorthWest(), e.zoom, e.center) :
-            this._map._getCenterOffset(e.center)._multiplyBy(-scale).subtract(this._map._getMapPanePos());
-        DomUtil.setTransform(this._canvas, offset, scale);
+        var scale = this._map.getZoomScale(e.zoom, this._map.getZoom());
+        var position = DomUtil.getPosition(this.canvas);
+        var viewHalf = this._map.getSize().multiplyBy(0.5);
+        var currentCenterPoint = this._map.project(this._map.getCenter(), e.zoom);
+        var destCenterPoint = this._map.project(e.center, e.zoom);
+        var centerOffset = destCenterPoint.subtract(currentCenterPoint);
+        var topLeftOffset = viewHalf.multiplyBy(-scale).add(position).add(viewHalf).subtract(centerOffset);
+        DomUtil.setTransform(this.canvas, topLeftOffset, scale);
+    };
+    CanvasLayer.prototype.onLayerDidMount = function () {
+        //noop
+    };
+    CanvasLayer.prototype.onLayerDidUnmount = function () {
+        //noop
+    };
+    CanvasLayer.prototype.onLayerWillUnmount = function () {
+        //noop
+    };
+    CanvasLayer.prototype.onDrawLayer = function () {
+        //noop
     };
     return CanvasLayer;
-}());
+}(Layer));
 
 var layer = /** @class */ (function () {
     function layer(mapBound, canvasBound) {
@@ -639,29 +670,189 @@ var layer = /** @class */ (function () {
     return layer;
 }());
 
+var VelocityControl = /** @class */ (function (_super) {
+    __extends(VelocityControl, _super);
+    function VelocityControl() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.options = {
+            position: "bottomleft",
+            emptyString: "Unavailable",
+            // Could be any combination of 'bearing' (angle toward which the flow goes) or 'meteo' (angle from which the flow comes)
+            // and 'CW' (angle value increases clock-wise) or 'CCW' (angle value increases counter clock-wise)
+            angleConvention: "bearingCCW",
+            showCardinal: false,
+            // Could be 'm/s' for meter per second, 'k/h' for kilometer per hour, 'mph' for miles per hour or 'kt' for knots
+            speedUnit: "m/s",
+            directionString: "Direction",
+            speedString: "Speed",
+            velocityType: '',
+            onAdd: undefined,
+            onRemove: undefined,
+            leafletVelocity: undefined,
+        };
+        return _this;
+    }
+    VelocityControl.prototype.onAdd = function (map) {
+        this._map = map;
+        this._container = DomUtil.create("div", "leaflet-control-velocity");
+        DomEvent.disableClickPropagation(this._container);
+        map.on("mousemove", this._onMouseMove, this);
+        this._container.innerHTML = this.options.emptyString;
+        if (this.options.leafletVelocity.options.onAdd) {
+            this.options.leafletVelocity.options.onAdd();
+        }
+        return this._container;
+    };
+    VelocityControl.prototype.onRemove = function (map) {
+        var _a, _b;
+        map.off("mousemove", this._onMouseMove, this);
+        if ((_a = this.options.leafletVelocity) === null || _a === void 0 ? void 0 : _a.options.onRemove)
+            (_b = this.options.leafletVelocity) === null || _b === void 0 ? void 0 : _b.options.onRemove();
+    };
+    VelocityControl.prototype.vectorToSpeed = function (uMs, vMs, unit) {
+        var velocityAbs = Math.sqrt(Math.pow(uMs, 2) + Math.pow(vMs, 2));
+        // Default is m/s
+        if (unit === "k/h") {
+            return this.meterSec2kilometerHour(velocityAbs);
+        }
+        else if (unit === "kt") {
+            return this.meterSec2Knots(velocityAbs);
+        }
+        else if (unit === "mph") {
+            return this.meterSec2milesHour(velocityAbs);
+        }
+        else {
+            return velocityAbs;
+        }
+    };
+    VelocityControl.prototype.vectorToDegrees = function (uMs, vMs, angleConvention) {
+        // Default angle convention is CW
+        if (angleConvention.endsWith("CCW")) {
+            // vMs comes out upside-down..
+            vMs = vMs > 0 ? (vMs = -vMs) : Math.abs(vMs);
+        }
+        var velocityAbs = Math.sqrt(Math.pow(uMs, 2) + Math.pow(vMs, 2));
+        var velocityDir = Math.atan2(uMs / velocityAbs, vMs / velocityAbs);
+        var velocityDirToDegrees = (velocityDir * 180) / Math.PI + 180;
+        if (angleConvention === "bearingCW" || angleConvention === "meteoCCW") {
+            velocityDirToDegrees += 180;
+            if (velocityDirToDegrees >= 360)
+                velocityDirToDegrees -= 360;
+        }
+        return velocityDirToDegrees;
+    };
+    VelocityControl.prototype.degreesToCardinalDirection = function (deg) {
+        var cardinalDirection = '';
+        if (deg >= 0 && deg < 11.25 || deg >= 348.75) {
+            cardinalDirection = 'N';
+        }
+        else if (deg >= 11.25 && deg < 33.75) {
+            cardinalDirection = 'NNW';
+        }
+        else if (deg >= 33.75 && deg < 56.25) {
+            cardinalDirection = 'NW';
+        }
+        else if (deg >= 56.25 && deg < 78.75) {
+            cardinalDirection = 'WNW';
+        }
+        else if (deg >= 78.25 && deg < 101.25) {
+            cardinalDirection = 'W';
+        }
+        else if (deg >= 101.25 && deg < 123.75) {
+            cardinalDirection = 'WSW';
+        }
+        else if (deg >= 123.75 && deg < 146.25) {
+            cardinalDirection = 'SW';
+        }
+        else if (deg >= 146.25 && deg < 168.75) {
+            cardinalDirection = 'SSW';
+        }
+        else if (deg >= 168.75 && deg < 191.25) {
+            cardinalDirection = 'S';
+        }
+        else if (deg >= 191.25 && deg < 213.75) {
+            cardinalDirection = 'SSE';
+        }
+        else if (deg >= 213.75 && deg < 236.25) {
+            cardinalDirection = 'SE';
+        }
+        else if (deg >= 236.25 && deg < 258.75) {
+            cardinalDirection = 'ESE';
+        }
+        else if (deg >= 258.75 && deg < 281.25) {
+            cardinalDirection = 'E';
+        }
+        else if (deg >= 281.25 && deg < 303.75) {
+            cardinalDirection = 'ENE';
+        }
+        else if (deg >= 303.75 && deg < 326.25) {
+            cardinalDirection = 'NE';
+        }
+        else if (deg >= 326.25 && deg < 348.75) {
+            cardinalDirection = 'NNE';
+        }
+        return cardinalDirection;
+    };
+    VelocityControl.prototype.meterSec2Knots = function (meters) {
+        return meters / 0.514;
+    };
+    VelocityControl.prototype.meterSec2kilometerHour = function (meters) {
+        return meters * 3.6;
+    };
+    VelocityControl.prototype.meterSec2milesHour = function (meters) {
+        return meters * 2.23694;
+    };
+    VelocityControl.prototype._onMouseMove = function (e) {
+        var self = this;
+        var pos = this._map.containerPointToLatLng(point(e.containerPoint.x, e.containerPoint.y));
+        var gridValue = this.options.leafletVelocity.windy.grid.get(pos.lng, pos.lat);
+        var htmlOut = "";
+        if (gridValue && !isNaN(gridValue.u) && !isNaN(gridValue.v)) {
+            var deg = self.vectorToDegrees(gridValue.u, gridValue.v, this.options.angleConvention);
+            var cardinal = this.options.showCardinal ? " (" + self.degreesToCardinalDirection(deg) + ") " : '';
+            htmlOut = "<strong> " + this.options.velocityType + " " + this.options.directionString + ": </strong> " + deg.toFixed(2) + "\u00B0" + cardinal + ", <strong> " + this.options.velocityType + " " + this.options.speedString + ": </strong> " + self
+                .vectorToSpeed(gridValue.u, gridValue.v, this.options.speedUnit)
+                .toFixed(2) + " " + this.options.speedUnit;
+        }
+        else {
+            htmlOut = this.options.emptyString;
+        }
+        self._container.innerHTML = htmlOut;
+    };
+    return VelocityControl;
+}(Control));
+var ExtendedLControl = Object.assign(Control, { Velocity: Control.extend(new VelocityControl()) });
+var extendedLControl = Object.assign(control, { velocity: function (options) { return new ExtendedLControl.Velocity(options); } });
+
 var L_CanvasLayer = (Layer ? Layer : Class).extend(new CanvasLayer());
 var L_canvasLayer = function () {
     return new L_CanvasLayer();
 };
-var VelocityLayer = /** @class */ (function () {
+var VelocityLayer = /** @class */ (function (_super) {
+    __extends(VelocityLayer, _super);
     function VelocityLayer() {
-        this._map = null;
-        this._canvasLayer = null;
-        this._windy = null;
-        this._context = null;
-        this._displayTimeout = 0;
-        this._events = null;
-        this.options = {
+        var _this = _super.call(this) || this;
+        _this._map = null;
+        _this._canvasLayer = null;
+        _this._context = null;
+        _this._events = null;
+        _this.options = {
             displayValues: true,
             displayOptions: {
-                velocityType: 'Velocity',
-                position: 'bottomleft',
-                emptyString: 'No velocity data'
+                velocityType: 'Wind',
+                position: 'topright',
+                emptyString: '--',
+                angleConvention: 'bearingCCW',
+                showCardinal: true,
+                speedUnit: 'm/s',
+                directionString: 'Direction',
+                speedString: 'Speed',
             },
             maxVelocity: 10,
             colorScale: null,
             data: null
         };
+        return _this;
     }
     VelocityLayer.prototype.initialize = function (options) {
         Util.setOptions(this, options);
@@ -671,22 +862,24 @@ var VelocityLayer = /** @class */ (function () {
         this._canvasLayer = L_canvasLayer().delegate(this);
         this._canvasLayer.addTo(map);
         this._map = map;
+        return this;
     };
-    VelocityLayer.prototype.onRemove = function (map) {
+    VelocityLayer.prototype.onRemove = function () {
         this._destroyWind();
+        return this;
     };
     VelocityLayer.prototype.setData = function (data) {
         this.options.data = data;
-        if (this._windy) {
-            this._windy.setData(data);
+        if (this.windy) {
+            this.windy.setData(data);
             this._clearAndRestart();
         }
         this.fire('load');
     };
     /*------------------------------------ PRIVATE ------------------------------------------*/
-    VelocityLayer.prototype.onDrawLayer = function (overlay, params) {
+    VelocityLayer.prototype.onDrawLayer = function () {
         var self = this;
-        if (!this._windy) {
+        if (!this.windy) {
             this._initWindy();
             return;
         }
@@ -703,16 +896,16 @@ var VelocityLayer = /** @class */ (function () {
         var bounds = this._map.getBounds();
         var size = this._map.getSize();
         // bounds, width, height, extent
-        this._windy.start(new layer(new MapBound(bounds.getNorthEast().lat, bounds.getNorthEast().lng, bounds.getSouthWest().lat, bounds.getSouthWest().lng), new CanvasBound(0, 0, size.x, size.y)));
+        this.windy.start(new layer(new MapBound(bounds.getNorthEast().lat, bounds.getNorthEast().lng, bounds.getSouthWest().lat, bounds.getSouthWest().lng), new CanvasBound(0, 0, size.x, size.y)));
     };
     VelocityLayer.prototype._initWindy = function () {
         // windy object, copy options
-        var options = Object.assign({ canvas: this._canvasLayer._canvas }, this.options);
-        this._windy = new Windy(options);
+        this.windy = new Windy(__assign({ canvas: this._canvasLayer.canvas }, this.options));
         // prepare context global var, start drawing
-        this._context = this._canvasLayer._canvas.getContext('2d');
-        this._canvasLayer._canvas.classList.add("velocity-overlay");
+        this._context = this._canvasLayer.canvas.getContext('2d');
+        this._canvasLayer.canvas.classList.add("velocity-overlay");
         this.onDrawLayer();
+        this._initMouseHandler(false);
         this._toggleEvents(true);
     };
     VelocityLayer.prototype._toggleEvents = function (bind) {
@@ -721,10 +914,10 @@ var VelocityLayer = /** @class */ (function () {
         if (this._events === null) {
             this._events = {
                 'dragstart': function () {
-                    _this._windy.stop();
+                    _this.windy.stop();
                 },
                 'zoomstart': function () {
-                    _this._windy.stop();
+                    _this.windy.stop();
                 },
                 'resize': function () {
                     _this._clearWind();
@@ -737,32 +930,45 @@ var VelocityLayer = /** @class */ (function () {
             }
         }
     };
+    VelocityLayer.prototype._initMouseHandler = function (voidPrevious) {
+        if (voidPrevious) {
+            this._map.removeControl(this._mouseControl);
+            this._mouseControl = null;
+        }
+        if (!this._mouseControl && this.options.displayValues) {
+            var options = __assign(__assign({}, this.options.displayOptions), { leafletVelocity: this });
+            this._mouseControl = extendedLControl.velocity(options).addTo(this._map);
+        }
+    };
     VelocityLayer.prototype._clearAndRestart = function () {
         if (this._context)
             this._context.clearRect(0, 0, 3000, 3000);
-        if (this._windy)
+        if (this.windy)
             this._startWindy();
     };
     VelocityLayer.prototype._clearWind = function () {
-        if (this._windy)
-            this._windy.stop();
+        if (this.windy)
+            this.windy.stop();
         if (this._context)
             this._context.clearRect(0, 0, 3000, 3000);
     };
     VelocityLayer.prototype._destroyWind = function () {
         if (this._displayTimeout)
             clearTimeout(this._displayTimeout);
-        if (this._windy)
-            this._windy.stop();
+        if (this.windy)
+            this.windy.stop();
         if (this._context)
             this._context.clearRect(0, 0, 3000, 3000);
         //off event bind
         this._toggleEvents(false);
-        this._windy = null;
+        this.windy = null;
+        if (this._mouseControl)
+            this._map.removeControl(this._mouseControl);
+        this._mouseControl = null;
         this._map.removeLayer(this._canvasLayer);
     };
     return VelocityLayer;
-}());
+}(Layer));
 
 window.CanvasBound = CanvasBound;
 window.MapBound = MapBound;
