@@ -73,7 +73,6 @@ export default class VelocityLayer extends L.Layer {
 
     if (this.windy) {
       this.windy.setData(data);
-      this._clearAndRestart();
     }
 
     this.fire("load");
