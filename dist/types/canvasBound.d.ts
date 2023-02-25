@@ -1,4 +1,4 @@
-import Particule from "./particle";
+import Particle from "./particle";
 export default class CanvasBound {
     xMin: number;
     yMin: number;
@@ -7,6 +7,6 @@ export default class CanvasBound {
     constructor(xMin: number, yMin: number, xMax: number, yMax: number);
     get width(): number;
     get height(): number;
-    getRandomParticule(maxAge: number): Particule;
-    resetParticule(p: Particule): Particule;
+    getRandomParticle(maxAge: number): Particle;
+    resetParticle(p: Particle): Particle;
 }

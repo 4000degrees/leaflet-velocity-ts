@@ -1,4 +1,4 @@
-export default class Particule {
+export default class Particle {
     x: number;
     y: number;
     age: number;

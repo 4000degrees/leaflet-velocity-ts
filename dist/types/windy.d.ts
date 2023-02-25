@@ -1,6 +1,6 @@
 import Vector from "./vector";
 import Grid from "./grid";
-import Particule from "./particle";
+import Particle from "./particle";
 import Layer from "./layer";
 import { GfsDataset } from "./gfs-dataset.model";
 export interface WindyOptions {
@@ -20,25 +20,25 @@ export default class Windy {
     private canvas;
     private colorScale;
     private velocityScale;
-    private particuleMultiplier;
+    private particleMultiplier;
     private particleAge;
-    private particuleLineWidth;
+    private particleLineWidth;
     private autoColorRange;
     private layer;
-    private particules;
+    private particles;
     private animationBucket;
     private context2D;
     private animationLoop;
     private frameTime;
     private then;
     constructor(options: WindyOptions);
-    get particuleCount(): number;
+    get particleCount(): number;
     /**
      * Load data
      * @param data
      */
     setData(data: GfsDataset): void;
-    getParticuleWind(p: Particule): Vector;
+    getParticleWind(p: Particle): Vector;
     start(layer: Layer): void;
     frame(): void;
     evolve(): void;

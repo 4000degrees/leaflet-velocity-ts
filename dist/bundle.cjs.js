@@ -358,8 +358,8 @@ var AnimationBucket = /** @class */ (function () {
         }
     }
     AnimationBucket.prototype.clear = function () {
-        this.buckets.forEach(function (particuleSet) {
-            particuleSet.splice(0, particuleSet.length);
+        this.buckets.forEach(function (particleSet) {
+            particleSet.splice(0, particleSet.length);
         });
     };
     AnimationBucket.prototype.add = function (p, v) {
@@ -394,9 +394,9 @@ var AnimationBucket = /** @class */ (function () {
 var Windy = /** @class */ (function () {
     function Windy(options) {
         this.canvas = null;
-        this.particuleMultiplier = 1 / 300;
+        this.particleMultiplier = 1 / 300;
         this.autoColorRange = false;
-        this.particules = [];
+        this.particles = [];
         this.animationLoop = null;
         this.then = 0;
         this.canvas = options.canvas;
@@ -408,19 +408,19 @@ var Windy = /** @class */ (function () {
         this.velocityScale = options.velocityScale || 0.01;
         this.particleAge = options.particleAge || 64;
         this.setData(options.data);
-        this.particuleMultiplier = options.particleMultiplier || 1 / 300;
-        this.particuleLineWidth = options.lineWidth || 1;
+        this.particleMultiplier = options.particleMultiplier || 1 / 300;
+        this.particleLineWidth = options.lineWidth || 1;
         var frameRate = options.frameRate || 15;
         this.frameTime = 1000 / frameRate;
     }
-    Object.defineProperty(Windy.prototype, "particuleCount", {
+    Object.defineProperty(Windy.prototype, "particleCount", {
         get: function () {
-            var particuleReduction = /android|blackberry|iemobile|ipad|iphone|ipod|opera mini|webos/i.test(navigator.userAgent)
+            var particleReduction = /android|blackberry|iemobile|ipad|iphone|ipod|opera mini|webos/i.test(navigator.userAgent)
                 ? Math.pow(window.devicePixelRatio, 1 / 3) || 1.6
                 : 1;
             return (Math.round(this.layer.canvasBound.width *
                 this.layer.canvasBound.height *
-                this.particuleMultiplier) * particuleReduction);
+                this.particleMultiplier) * particleReduction);
         },
         enumerable: false,
         configurable: true
@@ -458,7 +458,7 @@ var Windy = /** @class */ (function () {
             this.colorScale.setMinMax(minMax[0], minMax[1]);
         }
     };
-    Windy.prototype.getParticuleWind = function (p) {
+    Windy.prototype.getParticleWind = function (p) {
         var lngLat = this.layer.canvasToMap(p.x, p.y);
         var wind = this.grid.get(lngLat[0], lngLat[1]);
         p.intensity = wind.intensity;
@@ -469,14 +469,14 @@ var Windy = /** @class */ (function () {
     };
     Windy.prototype.start = function (layer) {
         this.context2D = this.canvas.getContext("2d");
-        this.context2D.lineWidth = this.particuleLineWidth;
+        this.context2D.lineWidth = this.particleLineWidth;
         this.context2D.fillStyle = "rgba(0, 0, 0, 0.97)";
         this.context2D.globalAlpha = 0.6;
         this.layer = layer;
         this.animationBucket = new AnimationBucket(this.colorScale);
-        this.particules.splice(0, this.particules.length);
-        for (var i = 0; i < this.particuleCount; i++) {
-            this.particules.push(this.layer.canvasBound.getRandomParticule(this.particleAge));
+        this.particles.splice(0, this.particles.length);
+        for (var i = 0; i < this.particleCount; i++) {
+            this.particles.push(this.layer.canvasBound.getRandomParticle(this.particleAge));
         }
         this.then = new Date().getTime();
         this.frame();
@@ -497,12 +497,12 @@ var Windy = /** @class */ (function () {
     Windy.prototype.evolve = function () {
         var _this = this;
         this.animationBucket.clear();
-        this.particules.forEach(function (p) {
+        this.particles.forEach(function (p) {
             p.grow();
             if (p.isDead) {
-                _this.layer.canvasBound.resetParticule(p);
+                _this.layer.canvasBound.resetParticle(p);
             }
-            var wind = _this.getParticuleWind(p);
+            var wind = _this.getParticleWind(p);
             _this.animationBucket.add(p, wind);
         });
     };
@@ -515,7 +515,7 @@ var Windy = /** @class */ (function () {
         this.animationBucket.draw(this.context2D);
     };
     Windy.prototype.stop = function () {
-        this.particules.splice(0, this.particules.length);
+        this.particles.splice(0, this.particles.length);
         this.animationBucket.clear();
         if (this.animationLoop) {
             clearTimeout(this.animationLoop);
@@ -525,29 +525,29 @@ var Windy = /** @class */ (function () {
     return Windy;
 }());
 
-var Particule = /** @class */ (function () {
-    function Particule(x, y, maxAge) {
+var Particle = /** @class */ (function () {
+    function Particle(x, y, maxAge) {
         this.x = x;
         this.y = y;
         this.age = Math.floor(Math.random() * maxAge);
         this.maxAge = maxAge;
     }
-    Particule.prototype.reset = function (x, y) {
+    Particle.prototype.reset = function (x, y) {
         this.x = x;
         this.y = y;
         this.age = 0;
     };
-    Object.defineProperty(Particule.prototype, "isDead", {
+    Object.defineProperty(Particle.prototype, "isDead", {
         get: function () {
             return this.age > this.maxAge;
         },
         enumerable: false,
         configurable: true
     });
-    Particule.prototype.grow = function () {
+    Particle.prototype.grow = function () {
         this.age++;
     };
-    return Particule;
+    return Particle;
 }());
 
 var CanvasBound = /** @class */ (function () {
@@ -571,12 +571,12 @@ var CanvasBound = /** @class */ (function () {
         enumerable: false,
         configurable: true
     });
-    CanvasBound.prototype.getRandomParticule = function (maxAge) {
+    CanvasBound.prototype.getRandomParticle = function (maxAge) {
         var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
         var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
-        return new Particule(x, y, maxAge);
+        return new Particle(x, y, maxAge);
     };
-    CanvasBound.prototype.resetParticule = function (p) {
+    CanvasBound.prototype.resetParticle = function (p) {
         var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
         var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
         p.reset(x, y);
@@ -915,7 +915,6 @@ var VelocityLayer = /** @class */ (function (_super) {
         this.options.data = data;
         if (this.windy) {
             this.windy.setData(data);
-            this._clearAndRestart();
         }
         this.fire("load");
     };
