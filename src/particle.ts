@@ -1,4 +1,4 @@
-export default class Particule {
+export default class Particle {
   public x: number;
   public y: number;
   public age: number;

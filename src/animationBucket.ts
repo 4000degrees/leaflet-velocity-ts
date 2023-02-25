@@ -1,10 +1,10 @@
 import ColorScale from "./colorScale";
-import Particule from "./particle";
+import Particle from "./particle";
 import Vector from "./vector";
 
 export default class AnimationBucket {
   private colorScale: ColorScale;
-  private buckets: Particule[][] = [];
+  private buckets: Particle[][] = [];
 
   constructor(colorScale: ColorScale) {
     this.colorScale = colorScale;
@@ -14,12 +14,12 @@ export default class AnimationBucket {
   }
 
   clear() {
-    this.buckets.forEach((particuleSet: Particule[]) => {
-      particuleSet.splice(0, particuleSet.length);
+    this.buckets.forEach((particleSet: Particle[]) => {
+      particleSet.splice(0, particleSet.length);
     });
   }
 
-  add(p: Particule, v: Vector) {
+  add(p: Particle, v: Vector) {
     const index = this.colorScale.getColorIndex(p.intensity);
     if (index < 0 || index >= this.buckets.length) {
       console.log(index);
@@ -31,7 +31,7 @@ export default class AnimationBucket {
   }
 
   draw(context2D: CanvasRenderingContext2D) {
-    this.buckets.forEach((bucket: Particule[], i: number) => {
+    this.buckets.forEach((bucket: Particle[], i: number) => {
       if (bucket.length > 0) {
         context2D.beginPath();
         context2D.strokeStyle = this.colorScale.colorAt(i);

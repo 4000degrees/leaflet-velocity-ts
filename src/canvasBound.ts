@@ -1,4 +1,4 @@
-import Particule from "./particle";
+import Particle from "./particle";
 
 export default class CanvasBound {
   public xMin: number;
@@ -21,13 +21,13 @@ export default class CanvasBound {
     return this.yMax - this.yMin;
   }
 
-  getRandomParticule(maxAge: number): Particule {
+  getRandomParticle(maxAge: number): Particle {
     const x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
     const y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
-    return new Particule(x, y, maxAge);
+    return new Particle(x, y, maxAge);
   }
 
-  resetParticule(p: Particule): Particule {
+  resetParticle(p: Particle): Particle {
     const x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
     const y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
     p.reset(x, y);
