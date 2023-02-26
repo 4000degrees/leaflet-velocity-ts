@@ -27,7 +27,6 @@ export default class VelocityLayer extends L.Layer {
   public _map: L.Map = null;
   private _canvasLayer: CanvasLayer = null;
   private _context: CanvasRenderingContext2D = null;
-  private _displayTimeout: ReturnType<typeof setTimeout>;
   private _events: Record<string, L.LeafletEventHandlerFn> = null;
   private _mouseControl: VelocityControl;
 
@@ -78,8 +77,6 @@ export default class VelocityLayer extends L.Layer {
     this.fire("load");
   }
 
-  /*------------------------------------ PRIVATE ------------------------------------------*/
-
   onDrawLayer() {
     if (!this.windy) {
       this._initWindy();
@@ -90,11 +87,7 @@ export default class VelocityLayer extends L.Layer {
       return;
     }
 
-    if (this._displayTimeout) clearTimeout(this._displayTimeout);
-
-    this._displayTimeout = setTimeout(() => {
-      this._startWindy();
-    }, 150); // showing velocity is delayed
+    this._startWindy();
   }
 
   _startWindy() {
@@ -175,10 +168,8 @@ export default class VelocityLayer extends L.Layer {
   }
 
   _destroyWind() {
-    if (this._displayTimeout) clearTimeout(this._displayTimeout);
     if (this.windy) this.windy.stop();
     if (this._context) this._context.clearRect(0, 0, 3000, 3000);
-    //off event bind
     this._toggleEvents(false);
     this.windy = null;
     if (this._mouseControl) this._map.removeControl(this._mouseControl);
