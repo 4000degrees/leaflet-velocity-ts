@@ -12,7 +12,7 @@
   },
   "files": [
     "dist/*.js",
-    "dist/types/*.d.ts"
+    "dist/types/**/*.d.ts"
   ],
   "author": "",
   "license": "MIT",
