@@ -1,25 +1,17 @@
-import Windy, { WindyOptions } from "./windy";
-import CanvasBound from "./canvasBound";
-import MapBound from "./mapBound";
-import Layer from "./layer";
-import CanvasLayer from "./L.CanvasLayer";
 import * as L from "leaflet";
-import { extendedLControl, VelocityControlOptions } from "./L.Control.Velocity";
-import VelocityControl from "./L.Control.Velocity";
-import { GfsDataset } from "./gfs-dataset.model";
+import CanvasLayer from "./L.CanvasLayer";
+import VelocityControl, { extendedLControl } from "./L.Control.Velocity";
+import CanvasBound from "./canvasBound";
+import Layer from "./layer";
+import MapBound from "./mapBound";
+import { GfsDataset } from "./models/gfs-dataset.model";
+import Windy from "./windy";
+import { VelocityLayerOptions } from "./models/velocity-layer-options.model";
 
 const L_CanvasLayer = (L.Layer ? L.Layer : L.Class).extend(new CanvasLayer());
 const L_canvasLayer = function () {
   return new L_CanvasLayer();
 };
-
-export interface VelocityLayerOptions extends Partial<WindyOptions> {
-  displayValues: boolean;
-  displayOptions: VelocityControlOptions;
-  data: GfsDataset;
-  onAdd?: () => void;
-  onRemove?: () => void;
-}
 
 export default class VelocityLayer extends L.Layer {
   public options: VelocityLayerOptions;
@@ -33,7 +25,7 @@ export default class VelocityLayer extends L.Layer {
   constructor() {
     super();
     this.options = {
-      displayValues: true,
+      displayValues: false,
       displayOptions: {
         velocityType: "Wind",
         position: "topright",

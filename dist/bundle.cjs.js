@@ -179,6 +179,353 @@ var CanvasLayer = /** @class */ (function (_super) {
     return CanvasLayer;
 }(L__namespace.Layer));
 
+function vectorToSpeed(uMs, vMs, unit) {
+    var velocityAbs = Math.sqrt(Math.pow(uMs, 2) + Math.pow(vMs, 2));
+    // Default is m/s
+    if (unit === "k/h") {
+        return this.meterSec2kilometerHour(velocityAbs);
+    }
+    else if (unit === "kt") {
+        return this.meterSec2Knots(velocityAbs);
+    }
+    else if (unit === "mph") {
+        return this.meterSec2milesHour(velocityAbs);
+    }
+    else {
+        return velocityAbs;
+    }
+}
+function vectorToDegrees(uMs, vMs, angleConvention) {
+    // Default angle convention is CW
+    if (angleConvention.endsWith("CCW")) {
+        // vMs comes out upside-down..
+        vMs = vMs > 0 ? (vMs = -vMs) : Math.abs(vMs);
+    }
+    var velocityAbs = Math.sqrt(Math.pow(uMs, 2) + Math.pow(vMs, 2));
+    var velocityDir = Math.atan2(uMs / velocityAbs, vMs / velocityAbs);
+    var velocityDirToDegrees = (velocityDir * 180) / Math.PI + 180;
+    if (angleConvention === "bearingCW" || angleConvention === "meteoCCW") {
+        velocityDirToDegrees += 180;
+        if (velocityDirToDegrees >= 360)
+            velocityDirToDegrees -= 360;
+    }
+    return velocityDirToDegrees;
+}
+function degreesToCardinalDirection(deg) {
+    var cardinalDirection = "";
+    if ((deg >= 0 && deg < 11.25) || deg >= 348.75) {
+        cardinalDirection = "N";
+    }
+    else if (deg >= 11.25 && deg < 33.75) {
+        cardinalDirection = "NNW";
+    }
+    else if (deg >= 33.75 && deg < 56.25) {
+        cardinalDirection = "NW";
+    }
+    else if (deg >= 56.25 && deg < 78.75) {
+        cardinalDirection = "WNW";
+    }
+    else if (deg >= 78.25 && deg < 101.25) {
+        cardinalDirection = "W";
+    }
+    else if (deg >= 101.25 && deg < 123.75) {
+        cardinalDirection = "WSW";
+    }
+    else if (deg >= 123.75 && deg < 146.25) {
+        cardinalDirection = "SW";
+    }
+    else if (deg >= 146.25 && deg < 168.75) {
+        cardinalDirection = "SSW";
+    }
+    else if (deg >= 168.75 && deg < 191.25) {
+        cardinalDirection = "S";
+    }
+    else if (deg >= 191.25 && deg < 213.75) {
+        cardinalDirection = "SSE";
+    }
+    else if (deg >= 213.75 && deg < 236.25) {
+        cardinalDirection = "SE";
+    }
+    else if (deg >= 236.25 && deg < 258.75) {
+        cardinalDirection = "ESE";
+    }
+    else if (deg >= 258.75 && deg < 281.25) {
+        cardinalDirection = "E";
+    }
+    else if (deg >= 281.25 && deg < 303.75) {
+        cardinalDirection = "ENE";
+    }
+    else if (deg >= 303.75 && deg < 326.25) {
+        cardinalDirection = "NE";
+    }
+    else if (deg >= 326.25 && deg < 348.75) {
+        cardinalDirection = "NNE";
+    }
+    return cardinalDirection;
+}
+function meterSec2Knots(meters) {
+    return meters / 0.514;
+}
+function meterSec2kilometerHour(meters) {
+    return meters * 3.6;
+}
+function meterSec2milesHour(meters) {
+    return meters * 2.23694;
+}
+
+function getWindSpeedString(map, options, e) {
+    var pos = map.containerPointToLatLng(L__namespace.point(e.containerPoint.x, e.containerPoint.y));
+    var gridValue = options.leafletVelocity.windy.grid.get(pos.lng, pos.lat);
+    var htmlOut = "";
+    if (gridValue && !isNaN(gridValue.u) && !isNaN(gridValue.v)) {
+        var deg = vectorToDegrees(gridValue.u, gridValue.v, options.angleConvention);
+        var cardinal = options.showCardinal
+            ? " (".concat(degreesToCardinalDirection(deg), ") ")
+            : "";
+        htmlOut = "<strong> ".concat(options.velocityType, " ").concat(options.directionString, ": </strong> ").concat(deg.toFixed(2), "\u00B0").concat(cardinal, ", <strong> ").concat(options.velocityType, " ").concat(options.speedString, ": </strong> ").concat(vectorToSpeed(gridValue.u, gridValue.v, options.speedUnit).toFixed(2), " ").concat(options.speedUnit);
+    }
+    else {
+        htmlOut = options.emptyString;
+    }
+    return htmlOut;
+}
+
+var VelocityControl = /** @class */ (function (_super) {
+    __extends(VelocityControl, _super);
+    function VelocityControl() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this.options = {
+            position: "bottomleft",
+            emptyString: "Unavailable",
+            // Could be any combination of 'bearing' (angle toward which the flow goes) or 'meteo' (angle from which the flow comes)
+            // and 'CW' (angle value increases clock-wise) or 'CCW' (angle value increases counter clock-wise)
+            angleConvention: "bearingCCW",
+            showCardinal: false,
+            // Could be 'm/s' for meter per second, 'k/h' for kilometer per hour, 'mph' for miles per hour or 'kt' for knots
+            speedUnit: "m/s",
+            directionString: "Direction",
+            speedString: "Speed",
+            velocityType: "",
+            onAdd: undefined,
+            onRemove: undefined,
+            leafletVelocity: undefined,
+        };
+        return _this;
+    }
+    VelocityControl.prototype.onAdd = function (map) {
+        this._map = map;
+        this._container = L__namespace.DomUtil.create("div", "leaflet-control-velocity");
+        L__namespace.DomEvent.disableClickPropagation(this._container);
+        map.on("mousemove", this._onMouseMove, this);
+        this._container.innerHTML = this.options.emptyString;
+        if (this.options.leafletVelocity.options.onAdd) {
+            this.options.leafletVelocity.options.onAdd();
+        }
+        return this._container;
+    };
+    VelocityControl.prototype.onRemove = function (map) {
+        var _a, _b;
+        map.off("mousemove", this._onMouseMove, this);
+        if ((_a = this.options.leafletVelocity) === null || _a === void 0 ? void 0 : _a.options.onRemove)
+            (_b = this.options.leafletVelocity) === null || _b === void 0 ? void 0 : _b.options.onRemove();
+    };
+    VelocityControl.prototype._onMouseMove = function (e) {
+        this._container.innerHTML = getWindSpeedString(this._map, this.options, e);
+    };
+    return VelocityControl;
+}(L__namespace.Control));
+var ExtendedLControl = Object.assign(L__namespace.Control, {
+    Velocity: L__namespace.Control.extend(new VelocityControl()),
+});
+var extendedLControl = Object.assign(L__namespace.control, {
+    velocity: function (options) {
+        return new ExtendedLControl.Velocity(options);
+    },
+});
+
+var Particle = /** @class */ (function () {
+    function Particle(x, y, maxAge) {
+        this.x = x;
+        this.y = y;
+        this.age = Math.floor(Math.random() * maxAge);
+        this.maxAge = maxAge;
+    }
+    Particle.prototype.reset = function (x, y) {
+        this.x = x;
+        this.y = y;
+        this.age = 0;
+    };
+    Object.defineProperty(Particle.prototype, "isDead", {
+        get: function () {
+            return this.age > this.maxAge;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Particle.prototype.grow = function () {
+        this.age++;
+    };
+    return Particle;
+}());
+
+var CanvasBound = /** @class */ (function () {
+    function CanvasBound(xMin, yMin, xMax, yMax) {
+        this.xMin = xMin;
+        this.yMin = yMin;
+        this.xMax = xMax;
+        this.yMax = yMax;
+    }
+    Object.defineProperty(CanvasBound.prototype, "width", {
+        get: function () {
+            return this.xMax - this.xMin;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(CanvasBound.prototype, "height", {
+        get: function () {
+            return this.yMax - this.yMin;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    CanvasBound.prototype.getRandomParticle = function (maxAge) {
+        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
+        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
+        return new Particle(x, y, maxAge);
+    };
+    CanvasBound.prototype.resetParticle = function (p) {
+        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
+        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
+        p.reset(x, y);
+        return p;
+    };
+    return CanvasBound;
+}());
+
+var layer = /** @class */ (function () {
+    function layer(mapBound, canvasBound) {
+        this.canvasBound = canvasBound;
+        this.mapBound = mapBound;
+    }
+    /**
+     * Find geocoordinate from canvas point
+     * @param x
+     * @param y
+     * return [lng, lat]
+     */
+    layer.prototype.canvasToMap = function (x, y) {
+        var mapLonDelta = this.mapBound.east - this.mapBound.west;
+        var worldMapRadius = ((this.canvasBound.width / this.rad2deg(mapLonDelta)) * 360) /
+            (2 * Math.PI);
+        var mapOffsetY = (worldMapRadius / 2) *
+            Math.log((1 + Math.sin(this.mapBound.south)) /
+                (1 - Math.sin(this.mapBound.south)));
+        var equatorY = this.canvasBound.height + mapOffsetY;
+        var a = (equatorY - y) / worldMapRadius;
+        var φ = (180 / Math.PI) * (2 * Math.atan(Math.exp(a)) - Math.PI / 2);
+        var λ = this.rad2deg(this.mapBound.west) +
+            (x / this.canvasBound.width) * this.rad2deg(mapLonDelta);
+        return [λ, φ];
+    };
+    layer.prototype.mercY = function (φ) {
+        return Math.log(Math.tan(φ / 2 + Math.PI / 4));
+    };
+    /**
+     * Project a point on the map
+     * @param λ Longitude
+     * @param φ Latitude
+     * @return [x, y]
+     */
+    layer.prototype.mapToCanvas = function (λ, φ) {
+        var ymin = this.mercY(this.mapBound.south);
+        var ymax = this.mercY(this.mapBound.north);
+        var xFactor = this.canvasBound.width / (this.mapBound.east - this.mapBound.west);
+        var yFactor = this.canvasBound.height / (ymax - ymin);
+        var y = this.mercY(this.deg2rad(φ));
+        var x = (this.deg2rad(λ) - this.mapBound.west) * xFactor;
+        y = (ymax - y) * yFactor;
+        return [x, y];
+    };
+    layer.prototype.deg2rad = function (deg) {
+        return (deg * Math.PI) / 180;
+    };
+    layer.prototype.rad2deg = function (rad) {
+        return (rad * 180) / Math.PI;
+    };
+    /**
+     *
+     * @param λ Longitude
+     * @param φ Latitude
+     * @param x
+     * @param y
+     * @return []
+     */
+    layer.prototype.distortion = function (λ, φ, x, y) {
+        var τ = 2 * Math.PI;
+        //@see https://github.com/danwild/leaflet-velocity/issues/15#issuecomment-345260768
+        var H = 5;
+        var hλ = λ < 0 ? H : -H;
+        var hφ = φ < 0 ? H : -H;
+        var pλ = this.mapToCanvas(λ + hλ, φ);
+        var pφ = this.mapToCanvas(λ, φ + hφ);
+        // Meridian scale factor (see Snyder, equation 4-3), where R = 1. This handles issue where length of 1º λ
+        // changes depending on φ. Without this, there is a pinching effect at the poles.
+        var k = Math.cos((φ / 360) * τ);
+        return [
+            (pλ[0] - x) / hλ / k,
+            (pλ[1] - y) / hλ / k,
+            (pφ[0] - x) / hφ,
+            (pφ[1] - y) / hφ,
+        ];
+    };
+    /**
+     * Calculate distortion of the wind vector caused by the shape of the projection at point (x, y). The wind
+     * vector is modified in place and returned by this function.
+     * @param λ
+     * @param φ
+     * @param x
+     * @param y
+     * @param scale scale factor
+     * @param wind [u, v]
+     * @return []
+     */
+    layer.prototype.distort = function (λ, φ, x, y, scale, wind) {
+        var u = wind.u * scale;
+        var v = wind.v * scale;
+        var d = this.distortion(λ, φ, x, y);
+        // Scale distortion vectors by u and v, then add.
+        wind.u = d[0] * u + d[2] * v;
+        wind.v = d[1] * u + d[3] * v;
+        return wind;
+    };
+    return layer;
+}());
+
+var MapBound = /** @class */ (function () {
+    function MapBound(north, east, south, west) {
+        this.north = (north * Math.PI) / 180;
+        this.east = (east * Math.PI) / 180;
+        this.south = (south * Math.PI) / 180;
+        this.west = (west * Math.PI) / 180;
+    }
+    Object.defineProperty(MapBound.prototype, "width", {
+        get: function () {
+            return (720 + this.east - this.west) % 360;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    Object.defineProperty(MapBound.prototype, "height", {
+        get: function () {
+            return (360 + this.north - this.south) % 180;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    return MapBound;
+}());
+
 var Vector = /** @class */ (function () {
     function Vector(u, v) {
         this.u = u || 0;
@@ -525,348 +872,6 @@ var Windy = /** @class */ (function () {
     return Windy;
 }());
 
-var Particle = /** @class */ (function () {
-    function Particle(x, y, maxAge) {
-        this.x = x;
-        this.y = y;
-        this.age = Math.floor(Math.random() * maxAge);
-        this.maxAge = maxAge;
-    }
-    Particle.prototype.reset = function (x, y) {
-        this.x = x;
-        this.y = y;
-        this.age = 0;
-    };
-    Object.defineProperty(Particle.prototype, "isDead", {
-        get: function () {
-            return this.age > this.maxAge;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Particle.prototype.grow = function () {
-        this.age++;
-    };
-    return Particle;
-}());
-
-var CanvasBound = /** @class */ (function () {
-    function CanvasBound(xMin, yMin, xMax, yMax) {
-        this.xMin = xMin;
-        this.yMin = yMin;
-        this.xMax = xMax;
-        this.yMax = yMax;
-    }
-    Object.defineProperty(CanvasBound.prototype, "width", {
-        get: function () {
-            return this.xMax - this.xMin;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(CanvasBound.prototype, "height", {
-        get: function () {
-            return this.yMax - this.yMin;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    CanvasBound.prototype.getRandomParticle = function (maxAge) {
-        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
-        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
-        return new Particle(x, y, maxAge);
-    };
-    CanvasBound.prototype.resetParticle = function (p) {
-        var x = Math.round(Math.floor(Math.random() * this.width) + this.xMin);
-        var y = Math.round(Math.floor(Math.random() * this.height) + this.yMin);
-        p.reset(x, y);
-        return p;
-    };
-    return CanvasBound;
-}());
-
-var MapBound = /** @class */ (function () {
-    function MapBound(north, east, south, west) {
-        this.north = (north * Math.PI) / 180;
-        this.east = (east * Math.PI) / 180;
-        this.south = (south * Math.PI) / 180;
-        this.west = (west * Math.PI) / 180;
-    }
-    Object.defineProperty(MapBound.prototype, "width", {
-        get: function () {
-            return (720 + this.east - this.west) % 360;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    Object.defineProperty(MapBound.prototype, "height", {
-        get: function () {
-            return (360 + this.north - this.south) % 180;
-        },
-        enumerable: false,
-        configurable: true
-    });
-    return MapBound;
-}());
-
-var layer = /** @class */ (function () {
-    function layer(mapBound, canvasBound) {
-        this.canvasBound = canvasBound;
-        this.mapBound = mapBound;
-    }
-    /**
-     * Find geocoordinate from canvas point
-     * @param x
-     * @param y
-     * return [lng, lat]
-     */
-    layer.prototype.canvasToMap = function (x, y) {
-        var mapLonDelta = this.mapBound.east - this.mapBound.west;
-        var worldMapRadius = ((this.canvasBound.width / this.rad2deg(mapLonDelta)) * 360) /
-            (2 * Math.PI);
-        var mapOffsetY = (worldMapRadius / 2) *
-            Math.log((1 + Math.sin(this.mapBound.south)) /
-                (1 - Math.sin(this.mapBound.south)));
-        var equatorY = this.canvasBound.height + mapOffsetY;
-        var a = (equatorY - y) / worldMapRadius;
-        var φ = (180 / Math.PI) * (2 * Math.atan(Math.exp(a)) - Math.PI / 2);
-        var λ = this.rad2deg(this.mapBound.west) +
-            (x / this.canvasBound.width) * this.rad2deg(mapLonDelta);
-        return [λ, φ];
-    };
-    layer.prototype.mercY = function (φ) {
-        return Math.log(Math.tan(φ / 2 + Math.PI / 4));
-    };
-    /**
-     * Project a point on the map
-     * @param λ Longitude
-     * @param φ Latitude
-     * @return [x, y]
-     */
-    layer.prototype.mapToCanvas = function (λ, φ) {
-        var ymin = this.mercY(this.mapBound.south);
-        var ymax = this.mercY(this.mapBound.north);
-        var xFactor = this.canvasBound.width / (this.mapBound.east - this.mapBound.west);
-        var yFactor = this.canvasBound.height / (ymax - ymin);
-        var y = this.mercY(this.deg2rad(φ));
-        var x = (this.deg2rad(λ) - this.mapBound.west) * xFactor;
-        y = (ymax - y) * yFactor;
-        return [x, y];
-    };
-    layer.prototype.deg2rad = function (deg) {
-        return (deg * Math.PI) / 180;
-    };
-    layer.prototype.rad2deg = function (rad) {
-        return (rad * 180) / Math.PI;
-    };
-    /**
-     *
-     * @param λ Longitude
-     * @param φ Latitude
-     * @param x
-     * @param y
-     * @return []
-     */
-    layer.prototype.distortion = function (λ, φ, x, y) {
-        var τ = 2 * Math.PI;
-        //@see https://github.com/danwild/leaflet-velocity/issues/15#issuecomment-345260768
-        var H = 5;
-        var hλ = λ < 0 ? H : -H;
-        var hφ = φ < 0 ? H : -H;
-        var pλ = this.mapToCanvas(λ + hλ, φ);
-        var pφ = this.mapToCanvas(λ, φ + hφ);
-        // Meridian scale factor (see Snyder, equation 4-3), where R = 1. This handles issue where length of 1º λ
-        // changes depending on φ. Without this, there is a pinching effect at the poles.
-        var k = Math.cos((φ / 360) * τ);
-        return [
-            (pλ[0] - x) / hλ / k,
-            (pλ[1] - y) / hλ / k,
-            (pφ[0] - x) / hφ,
-            (pφ[1] - y) / hφ,
-        ];
-    };
-    /**
-     * Calculate distortion of the wind vector caused by the shape of the projection at point (x, y). The wind
-     * vector is modified in place and returned by this function.
-     * @param λ
-     * @param φ
-     * @param x
-     * @param y
-     * @param scale scale factor
-     * @param wind [u, v]
-     * @return []
-     */
-    layer.prototype.distort = function (λ, φ, x, y, scale, wind) {
-        var u = wind.u * scale;
-        var v = wind.v * scale;
-        var d = this.distortion(λ, φ, x, y);
-        // Scale distortion vectors by u and v, then add.
-        wind.u = d[0] * u + d[2] * v;
-        wind.v = d[1] * u + d[3] * v;
-        return wind;
-    };
-    return layer;
-}());
-
-var VelocityControl = /** @class */ (function (_super) {
-    __extends(VelocityControl, _super);
-    function VelocityControl() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this.options = {
-            position: "bottomleft",
-            emptyString: "Unavailable",
-            // Could be any combination of 'bearing' (angle toward which the flow goes) or 'meteo' (angle from which the flow comes)
-            // and 'CW' (angle value increases clock-wise) or 'CCW' (angle value increases counter clock-wise)
-            angleConvention: "bearingCCW",
-            showCardinal: false,
-            // Could be 'm/s' for meter per second, 'k/h' for kilometer per hour, 'mph' for miles per hour or 'kt' for knots
-            speedUnit: "m/s",
-            directionString: "Direction",
-            speedString: "Speed",
-            velocityType: "",
-            onAdd: undefined,
-            onRemove: undefined,
-            leafletVelocity: undefined,
-        };
-        return _this;
-    }
-    VelocityControl.prototype.onAdd = function (map) {
-        this._map = map;
-        this._container = L__namespace.DomUtil.create("div", "leaflet-control-velocity");
-        L__namespace.DomEvent.disableClickPropagation(this._container);
-        map.on("mousemove", this._onMouseMove, this);
-        this._container.innerHTML = this.options.emptyString;
-        if (this.options.leafletVelocity.options.onAdd) {
-            this.options.leafletVelocity.options.onAdd();
-        }
-        return this._container;
-    };
-    VelocityControl.prototype.onRemove = function (map) {
-        var _a, _b;
-        map.off("mousemove", this._onMouseMove, this);
-        if ((_a = this.options.leafletVelocity) === null || _a === void 0 ? void 0 : _a.options.onRemove)
-            (_b = this.options.leafletVelocity) === null || _b === void 0 ? void 0 : _b.options.onRemove();
-    };
-    VelocityControl.prototype.vectorToSpeed = function (uMs, vMs, unit) {
-        var velocityAbs = Math.sqrt(Math.pow(uMs, 2) + Math.pow(vMs, 2));
-        // Default is m/s
-        if (unit === "k/h") {
-            return this.meterSec2kilometerHour(velocityAbs);
-        }
-        else if (unit === "kt") {
-            return this.meterSec2Knots(velocityAbs);
-        }
-        else if (unit === "mph") {
-            return this.meterSec2milesHour(velocityAbs);
-        }
-        else {
-            return velocityAbs;
-        }
-    };
-    VelocityControl.prototype.vectorToDegrees = function (uMs, vMs, angleConvention) {
-        // Default angle convention is CW
-        if (angleConvention.endsWith("CCW")) {
-            // vMs comes out upside-down..
-            vMs = vMs > 0 ? (vMs = -vMs) : Math.abs(vMs);
-        }
-        var velocityAbs = Math.sqrt(Math.pow(uMs, 2) + Math.pow(vMs, 2));
-        var velocityDir = Math.atan2(uMs / velocityAbs, vMs / velocityAbs);
-        var velocityDirToDegrees = (velocityDir * 180) / Math.PI + 180;
-        if (angleConvention === "bearingCW" || angleConvention === "meteoCCW") {
-            velocityDirToDegrees += 180;
-            if (velocityDirToDegrees >= 360)
-                velocityDirToDegrees -= 360;
-        }
-        return velocityDirToDegrees;
-    };
-    VelocityControl.prototype.degreesToCardinalDirection = function (deg) {
-        var cardinalDirection = "";
-        if ((deg >= 0 && deg < 11.25) || deg >= 348.75) {
-            cardinalDirection = "N";
-        }
-        else if (deg >= 11.25 && deg < 33.75) {
-            cardinalDirection = "NNW";
-        }
-        else if (deg >= 33.75 && deg < 56.25) {
-            cardinalDirection = "NW";
-        }
-        else if (deg >= 56.25 && deg < 78.75) {
-            cardinalDirection = "WNW";
-        }
-        else if (deg >= 78.25 && deg < 101.25) {
-            cardinalDirection = "W";
-        }
-        else if (deg >= 101.25 && deg < 123.75) {
-            cardinalDirection = "WSW";
-        }
-        else if (deg >= 123.75 && deg < 146.25) {
-            cardinalDirection = "SW";
-        }
-        else if (deg >= 146.25 && deg < 168.75) {
-            cardinalDirection = "SSW";
-        }
-        else if (deg >= 168.75 && deg < 191.25) {
-            cardinalDirection = "S";
-        }
-        else if (deg >= 191.25 && deg < 213.75) {
-            cardinalDirection = "SSE";
-        }
-        else if (deg >= 213.75 && deg < 236.25) {
-            cardinalDirection = "SE";
-        }
-        else if (deg >= 236.25 && deg < 258.75) {
-            cardinalDirection = "ESE";
-        }
-        else if (deg >= 258.75 && deg < 281.25) {
-            cardinalDirection = "E";
-        }
-        else if (deg >= 281.25 && deg < 303.75) {
-            cardinalDirection = "ENE";
-        }
-        else if (deg >= 303.75 && deg < 326.25) {
-            cardinalDirection = "NE";
-        }
-        else if (deg >= 326.25 && deg < 348.75) {
-            cardinalDirection = "NNE";
-        }
-        return cardinalDirection;
-    };
-    VelocityControl.prototype.meterSec2Knots = function (meters) {
-        return meters / 0.514;
-    };
-    VelocityControl.prototype.meterSec2kilometerHour = function (meters) {
-        return meters * 3.6;
-    };
-    VelocityControl.prototype.meterSec2milesHour = function (meters) {
-        return meters * 2.23694;
-    };
-    VelocityControl.prototype._onMouseMove = function (e) {
-        var pos = this._map.containerPointToLatLng(L__namespace.point(e.containerPoint.x, e.containerPoint.y));
-        var gridValue = this.options.leafletVelocity.windy.grid.get(pos.lng, pos.lat);
-        var htmlOut = "";
-        if (gridValue && !isNaN(gridValue.u) && !isNaN(gridValue.v)) {
-            var deg = this.vectorToDegrees(gridValue.u, gridValue.v, this.options.angleConvention);
-            var cardinal = this.options.showCardinal
-                ? " (".concat(this.degreesToCardinalDirection(deg), ") ")
-                : "";
-            htmlOut = "<strong> ".concat(this.options.velocityType, " ").concat(this.options.directionString, ": </strong> ").concat(deg.toFixed(2), "\u00B0").concat(cardinal, ", <strong> ").concat(this.options.velocityType, " ").concat(this.options.speedString, ": </strong> ").concat(this.vectorToSpeed(gridValue.u, gridValue.v, this.options.speedUnit).toFixed(2), " ").concat(this.options.speedUnit);
-        }
-        else {
-            htmlOut = this.options.emptyString;
-        }
-        this._container.innerHTML = htmlOut;
-    };
-    return VelocityControl;
-}(L__namespace.Control));
-var ExtendedLControl = Object.assign(L__namespace.Control, {
-    Velocity: L__namespace.Control.extend(new VelocityControl()),
-});
-var extendedLControl = Object.assign(L__namespace.control, {
-    velocity: function (options) {
-        return new ExtendedLControl.Velocity(options);
-    },
-});
-
 var L_CanvasLayer = (L__namespace.Layer ? L__namespace.Layer : L__namespace.Class).extend(new CanvasLayer());
 var L_canvasLayer = function () {
     return new L_CanvasLayer();
@@ -880,7 +885,7 @@ var VelocityLayer = /** @class */ (function (_super) {
         _this._context = null;
         _this._events = null;
         _this.options = {
-            displayValues: true,
+            displayValues: false,
             displayOptions: {
                 velocityType: "Wind",
                 position: "topright",
@@ -918,9 +923,7 @@ var VelocityLayer = /** @class */ (function (_super) {
         }
         this.fire("load");
     };
-    /*------------------------------------ PRIVATE ------------------------------------------*/
     VelocityLayer.prototype.onDrawLayer = function () {
-        var _this = this;
         if (!this.windy) {
             this._initWindy();
             return;
@@ -928,11 +931,7 @@ var VelocityLayer = /** @class */ (function (_super) {
         if (!this.options.data) {
             return;
         }
-        if (this._displayTimeout)
-            clearTimeout(this._displayTimeout);
-        this._displayTimeout = setTimeout(function () {
-            _this._startWindy();
-        }, 150); // showing velocity is delayed
+        this._startWindy();
     };
     VelocityLayer.prototype._startWindy = function () {
         var bounds = this._map.getBounds();
@@ -995,13 +994,10 @@ var VelocityLayer = /** @class */ (function (_super) {
             this._context.clearRect(0, 0, 3000, 3000);
     };
     VelocityLayer.prototype._destroyWind = function () {
-        if (this._displayTimeout)
-            clearTimeout(this._displayTimeout);
         if (this.windy)
             this.windy.stop();
         if (this._context)
             this._context.clearRect(0, 0, 3000, 3000);
-        //off event bind
         this._toggleEvents(false);
         this.windy = null;
         if (this._mouseControl)
@@ -1023,5 +1019,14 @@ var velocityLayer = function (options) {
 };
 L.velocityLayer = velocityLayer;
 
+exports.ExtendedLControl = ExtendedLControl;
+exports.degreesToCardinalDirection = degreesToCardinalDirection;
+exports.extendedLControl = extendedLControl;
+exports.getWindSpeedString = getWindSpeedString;
+exports.meterSec2Knots = meterSec2Knots;
+exports.meterSec2kilometerHour = meterSec2kilometerHour;
+exports.meterSec2milesHour = meterSec2milesHour;
+exports.vectorToDegrees = vectorToDegrees;
+exports.vectorToSpeed = vectorToSpeed;
 exports.velocityLayer = velocityLayer;
 //# sourceMappingURL=bundle.cjs.js.map

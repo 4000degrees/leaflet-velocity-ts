@@ -2,7 +2,7 @@ import Vector from "./vector";
 import Grid from "./grid";
 import Particle from "./particle";
 import Layer from "./layer";
-import { GfsDataset } from "./gfs-dataset.model";
+import { GfsDataset } from "./models/gfs-dataset.model";
 export interface WindyOptions {
     canvas: HTMLCanvasElement;
     data: GfsDataset;

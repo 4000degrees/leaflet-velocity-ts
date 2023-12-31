@@ -4,7 +4,7 @@ import ColorScale from "./colorScale";
 import Particle from "./particle";
 import AnimationBucket from "./animationBucket";
 import Layer from "./layer";
-import { GfsDataset, GfsRecord } from "./gfs-dataset.model";
+import { GfsDataset, GfsRecord } from "./models/gfs-dataset.model";
 
 export interface WindyOptions {
   canvas: HTMLCanvasElement;
